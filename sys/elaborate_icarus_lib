@@ -1,0 +1,306 @@
+eval 'exec `which perl` -S $0 ${1+"$@"}'
+   if 0;
+
+#/**********************************************************************/
+#/*                                                                    */
+#/*             -------                                                */
+#/*            /   SOC  \                                              */
+#/*           /    GEN   \                                             */
+#/*          /    TOOL    \                                            */
+#/*          ==============                                            */
+#/*          |            |                                            */
+#/*          |____________|                                            */
+#/*                                                                    */
+#/*                                                                    */
+#/*                                                                    */
+#/*  Author(s):                                                        */
+#/*      - John Eaton, jt_eaton@opencores.org                          */
+#/*                                                                    */
+#/**********************************************************************/
+#/*                                                                    */
+#/*    Copyright (C) <2010-2014>  <Ouabache Design Works>              */
+#/*                                                                    */
+#/*  This source file may be used and distributed without              */
+#/*  restriction provided that this copyright statement is not         */
+#/*  removed from the file and that any derivative work contains       */
+#/*  the original copyright notice and the associated disclaimer.      */
+#/*                                                                    */
+#/*  This source file is free software; you can redistribute it        */
+#/*  and/or modify it under the terms of the GNU Lesser General        */
+#/*  Public License as published by the Free Software Foundation;      */
+#/*  either version 2.1 of the License, or (at your option) any        */
+#/*  later version.                                                    */
+#/*                                                                    */
+#/*  This source is distributed in the hope that it will be            */
+#/*  useful, but WITHOUT ANY WARRANTY; without even the implied        */
+#/*  warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR           */
+#/*  PURPOSE.  See the GNU Lesser General Public License for more      */
+#/*  details.                                                          */
+#/*                                                                    */
+#/*  You should have received a copy of the GNU Lesser General         */
+#/*  Public License along with this source; if not, download it        */
+#/*  from http://www.opencores.org/lgpl.shtml                          */
+#/*                                                                    */
+#/**********************************************************************/
+
+
+############################################################################
+# General PERL config
+############################################################################
+use Getopt::Long;
+use English;
+use File::Basename;
+use Cwd;
+use XML::LibXML;
+use lib './tools';
+use sys::lib;
+use yp::lib;
+
+$OUTPUT_AUTOFLUSH = 1; # set autoflush of stdout to TRUE.
+
+
+############################################################################
+### Process the options
+############################################################################
+Getopt::Long::config("require_order", "prefix=-");
+GetOptions("h","help",
+           "prefix=s" => \$prefix,
+           "vendor=s" => \$vendor
+
+
+) || die "(use '$program_name -h' for help)";
+
+
+
+
+##############################################################################
+## Help option
+##############################################################################
+if ( $opt_h or $opt_help  ) 
+  { print "\n elaborate_icarus_lib -prefix worksite -vendor vendor \n";
+    exit 1;
+  }
+
+
+#/**********************************************************************/
+#/*  Process by finding any ip-xact componentCfgfile in any component  */
+#/*                                                                    */
+#/*                                                                    */
+#/*                                                                    */
+#/**********************************************************************/
+
+my $home = cwd();
+my $parser = XML::LibXML->new();
+
+
+
+
+
+
+
+#############################################################################
+## 
+## 
+#############################################################################
+
+
+
+
+print "\nelaborate_icarus_lib   $prefix  $vendor        \n" ;
+
+
+
+
+
+
+my $library;
+
+my @testbenches          = (  );
+my @tests                = (  );
+my @kids          = (  );
+my @filelist      = (  );
+
+
+
+
+my @libraries = yp::lib::find_libraries("$vendor");     
+
+
+foreach $library (@libraries) 
+  {
+
+
+my @components = yp::lib::find_components("$vendor","$library");     
+
+foreach $component (@components) 
+  {
+
+
+
+  chomp($component);
+
+
+  my $socgen_file     = $parser->parse_file(yp::lib::find_componentConfiguration($vendor,$library,$component));
+  foreach  my   $i_name ($socgen_file->findnodes("//socgen:componentConfiguration/socgen:sim/socgen:icarus/socgen:test/socgen:name"))
+     {
+     my($sim_name)     = $i_name ->findnodes('./text()')->to_literal ;
+     my($sim_configuration)  = $i_name ->findnodes('../socgen:configuration/text()')->to_literal ;
+     my($sim_variant)  = $i_name ->findnodes('../socgen:variant/text()')->to_literal ;
+     print "     $vendor  $library      $component         $sim_name        $sim_configuration   $sim_variant  \n"; 
+     foreach  my   $i_name ($socgen_file->findnodes("//socgen:componentConfiguration/socgen:sim/socgen:testbenches/socgen:testbench[socgen:variant/text() = '$sim_variant']/./socgen:version"))
+        {
+        my($ver_name)   = $i_name ->findnodes('./text()')->to_literal ;
+        push @testbenches , "::${prefix}::${vendor}::${library}::${component}::${sim_variant}::${ver_name}::default::";
+        push @tests       , "::${prefix}::${vendor}::${library}::${component}::${sim_variant}::${ver_name}::${sim_configuration}::";
+        }
+     }
+
+
+  }
+
+  }
+
+
+
+
+  @testbenches =  sys::lib::trim_sort(@testbenches);   
+
+  foreach my $testbench (@testbenches)
+     {
+     $_ = $testbench;
+     if(/::(\S+)::(\S+)::(\S+)::(\S+)::(\S+)::(\S+)::(\S+)::/) 
+       { 
+       my $kid_prefix           = $1;
+       my $kid_vendor           = $2;
+       my $kid_library          = $3;
+       my $kid_component        = $4;
+       my $kid_variant          = $5; 
+       my $kid_version          = $6; 
+       my $kid_configuration    = $7;
+
+       my $path = "${home}${kid_prefix}";
+       mkdir $path,0755             unless( -e $path );
+       $path = "${path}/${kid_vendor}";
+       mkdir $path,0755             unless( -e $path );
+       $path = "${path}/${kid_library}";
+       mkdir $path,0755             unless( -e $path );
+       $path = "${path}/${kid_component}";
+       mkdir $path,0755             unless( -e $path );
+       $path = "${path}/${kid_version}";
+       mkdir $path,0755             unless( -e $path );
+
+
+
+
+       @filelist      = yp::lib::parse_component_file("$kid_vendor","$kid_library","$kid_component","$kid_version");
+
+
+       foreach $line (@filelist) 
+          {
+          $_ = $line;
+
+          if(/::(\S+)::(\S+)::(\S+)::(\S+)::/) 
+            { 
+            $new_vendor    = $1;        
+            $new_proj      = $2;
+            $new_comp      = $3;
+            $new_version   = $4;        
+            }
+
+         if( ($kid_vendor eq  $new_vendor)   &&  ( $kid_library eq  $new_proj)   && ( $kid_component eq  $new_comp )   &&   ( $kid_version eq  $new_version ) )
+           {
+           }
+         else
+           {
+           push @kids , "::${prefix}::${new_vendor}::${new_proj}::${new_comp}::${new_comp}_${new_version}::${new_version}::default::";
+           }
+          }
+     
+       }
+     }
+
+
+
+  @tests =  sys::lib::trim_sort(@tests);  
+
+
+  foreach my $test (@tests)
+     {
+     $_ = $test;
+
+     if(/::(\S+)::(\S+)::(\S+)::(\S+)::(\S+)::(\S+)::(\S+)::/) 
+       { 
+       my $kid_prefix           = $1;
+       my $kid_vendor           = $2;
+       my $kid_library          = $3;
+       my $kid_component        = $4;
+       my $kid_variant          = $5; 
+       my $kid_version          = $6; 
+       my $kid_configuration    = $7;
+       my $path = "${home}${kid_prefix}";
+       $path = "${path}/${kid_vendor}";
+       $path = "${path}/${kid_library}";
+       $path = "${path}/${kid_component}";
+       $path = "${path}/${kid_version}";
+
+       my $spirit_component_file    = yp::lib::find_ipxact_component($kid_vendor,$kid_library,$kid_component,$kid_version);
+       $cmd ="cp $spirit_component_file $path/${kid_configuration}.xml  \n";
+       if (system($cmd)) {}
+       }
+     }
+
+
+
+
+
+  @kids =  sys::lib::trim_sort(@kids);  
+
+
+
+
+  foreach my $kid (@kids)
+     {
+     $_ = $kid;
+
+     if(/::(\S+)::(\S+)::(\S+)::(\S+)::(\S+)::(\S+)::(\S+)::/) 
+       { 
+       my $kid_prefix           = $1;
+       my $kid_vendor           = $2;
+       my $kid_library          = $3;
+       my $kid_component        = $4;
+       my $kid_variant          = $5; 
+       my $kid_version          = $6; 
+       my $kid_configuration    = $7;
+
+       my $path = "${home}${kid_prefix}";
+       mkdir $path,0755             unless( -e $path );
+       $path = "${path}/${kid_vendor}";
+       mkdir $path,0755             unless( -e $path );
+       $path = "${path}/${kid_library}";
+       mkdir $path,0755             unless( -e $path );
+       $path = "${path}/${kid_component}";
+       mkdir $path,0755             unless( -e $path );
+       $path = "${path}/${kid_version}";
+       mkdir $path,0755             unless( -e $path );
+
+       print " $kid_vendor $kid_library $kid_component $kid_version         \n";
+
+       my $spirit_component_file    = yp::lib::find_ipxact_component($kid_vendor,$kid_library,$kid_component,$kid_version);
+       $cmd ="cp $spirit_component_file $path/${kid_configuration}.xml  \n";
+       if (system($cmd)) {}
+       }
+     }   
+
+
+
+
+       
+1;
+
+
+
+
+
+
+
+
