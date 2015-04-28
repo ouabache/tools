@@ -73,12 +73,15 @@ GetOptions("h","help",
            "library=s" => \$library,
            "component=s" => \$component,
            "version=s" => \$version,
+           "configuration=s" => \$configuration,
+           "dest_dir=s" => \$dest_dir,
            "env=s" => \$env,
            "tool=s" => \$tool,
            "unit=s" => \$unit,
            "name=s" => \$name
 
 ) || die "(use '$program_name -h' for help)";
+
 
 
 ##############################################################################
@@ -106,9 +109,10 @@ unless ($prefix)
 
 
 my   $variant;
-my   $configuration;
 
-my $dest_dir            = "elab";
+
+
+
 my $destination         = "${component}_${version}";
 
 unless ($env ) {$env = "none";}
@@ -121,7 +125,6 @@ if($name)
   }
 else
   {
-  $name          = $version;
   $destination   = "${destination}";
   }
 
@@ -133,7 +136,7 @@ my $root                =      "root";
 if($version)       {$variant   = "${component}_${version}";}
 else               {$variant   = "${component}";}
 
-#print "elab_verilog -prefix $prefix -vendor $vendor -library $library -component $component -version $version -env $env -tool $tool -unit $unit -name $name     \n";
+#print "ELAB_VERILOG -prefix $prefix -vendor $vendor -library $library -component $component -version $version   -env $env -tool $tool -unit $unit -name $name     \n";
 
 
 my $parser = XML::LibXML->new();
@@ -147,55 +150,33 @@ unless ($socgen_file)      { print "No socgen ip file   \n";};
 my $comp_xml_sep    = yp::lib::find_comp_xml_sep($vendor,$library,$component,$version);
 my $lib_comp_sep    = yp::lib::find_lib_comp_sep($vendor,$library,$component);
 
-
-#print "lib_comp_sep   $lib_comp_sep \n";
-#print "comp_xml_sep   $comp_xml_sep \n";
+my $path;
 
 
 
 
-my $path  = "${home}${prefix}/${vendor}__${library}${lib_comp_sep}${component}${comp_xml_sep}/../${dest_dir}";
 
-unless( -e $path )
-        {
-        print "$path does not exist... creating \n";
-        my $cmd = "mkdir $path \n";
-        if(system($cmd)){};
-        }
+$data_db_file  = "${home}/dbs/${vendor}_${library}_${destination}.db";
 
 
-
-$data_db_dir  = "${path}/${destination}";
-
-
-
-
-unless(-e  $data_db_dir  )
-        {
-        my $cmd = "mkdir  $data_db_dir \n";
-        if(system($cmd)){};
-        }
-
-
-$data_db_file  = "${path}/${destination}/${root}.db";
-
-
-
-
-if(-e  $data_db_file  )
-        {
-        print "$data_db_file  does exist... removing  \n";
-        my $cmd = "rm  $data_db_file \n";
-        if(system($cmd)){};
-        }
-
-
-print "ELAB  $data_db_file  \n";
+#print "ELAB_XXXXX ${vendor}_${library}_${component}_${version}  $env  $tool  $unit || $name || $data_db_file   \n";
 
 
 my $elab_db  = new BerkeleyDB::Hash( -Filename => "$data_db_file", -Flags => DB_CREATE ) or die "Cannot open $data_db_file: $!";
 $elab_db->db_put( "component_${root}","${vendor}:${library}:${component}:${version}"  );
 $elab_db->db_put( "component___root" ,"${vendor}:${library}:${component}:${version}"  );
+
+my $repo_data;
+$elab_db->db_get("VLNV___${vendor}:${library}:${component}:${version}", $repo_data );
+$elab_db->db_put("VLNV___${vendor}:${library}:${component}:${version}","${repo_data}${root}:::"     );
+
+
+
+
+
+
+
+
 
 
 
@@ -203,16 +184,54 @@ foreach  my   $socgen_cfg ($socgen_file->findnodes("//socgen:componentConfigurat
           {
           my($ise_param)             = $socgen_cfg ->findnodes('./socgen:value/text()')->to_literal ;
           my($ise_param_name)        = $socgen_cfg ->findnodes('./socgen:name/text()')->to_literal ;
-          my($ise_new_name   )    = $socgen_cfg ->findnodes('../../socgen:name/text()')->to_literal ;
+          my($ise_new_name   )       = $socgen_cfg ->findnodes('../../socgen:name/text()')->to_literal ;
           if($name eq "${ise_new_name}")
              {         
              if($ise_param_name)
                {
                $elab_db->db_put( "parameter_${root}__${ise_param_name}","${ise_param}"  );
-               #print "XXXXXXXA $ise_param_name  $ise_param           $ise_new_name    \n";
                }
              }
+
+          if($version eq "${ise_new_name}")
+             {         
+             if($ise_param_name)
+               {
+               $elab_db->db_put( "parameter_${root}__${ise_param_name}","${ise_param}"  );
+               }
+             }
+
+
+
           }
+
+
+
+
+     #/**********************************************************************/
+     #/*                                                                    */
+     #/* if configuration set then read parameters from socgen:componentConfiguration file      */
+     #/*                                                                    */
+     #/**********************************************************************/
+     if(defined $configuration)
+        {
+          foreach my $socgen_cfg ($socgen_file->findnodes("//socgen:componentConfiguration/socgen:configurations/socgen:configuration/socgen:parameters/socgen:parameter/socgen:name")) 
+          {
+          my($param_name)         = $socgen_cfg->findnodes('./text()')->to_literal ;
+          my($param_value)        = $socgen_cfg->findnodes('../socgen:value/text()')->to_literal ;
+          my($config_name)        = $socgen_cfg->findnodes('../../../socgen:name/text()')->to_literal ;
+          if($config_name eq $configuration  )
+            {
+            my $repo_data;
+            $elab_db->db_get("parameter_${root}__${param_name}", $repo_data );
+            unless (defined $repo_data)
+              {
+              $elab_db->db_put( "parameter_${root}__${param_name}","${param_value}"  );            
+              }
+            }
+          }
+       }
+    
 
 
 
@@ -220,8 +239,7 @@ foreach  my   $socgen_cfg ($socgen_file->findnodes("//socgen:componentConfigurat
 foreach my $socgen_cfg ($socgen_file->findnodes("//socgen:componentConfiguration/socgen:${env}/socgen:${tool}/socgen:${unit}/socgen:variant")) 
      {
      my($variant_name)     = $socgen_cfg->findnodes('./text()')->to_literal ;
-     $configuration        = $socgen_cfg->findnodes('../socgen:configuration/text()')->to_literal ;
-
+     my $configuration        = $socgen_cfg->findnodes('../socgen:configuration/text()')->to_literal ;
      #/**********************************************************************/
      #/*                                                                    */
      #/* if configuration set then read parameters from socgen:componentConfiguration file      */
@@ -229,28 +247,23 @@ foreach my $socgen_cfg ($socgen_file->findnodes("//socgen:componentConfiguration
      #/**********************************************************************/
      if($variant_name eq $variant)
         {
-        #print "XXXXXXXQ $variant_name  configuration $configuration  \n";  
-        foreach my $socgen_cfg ($socgen_file->findnodes("//socgen:componentConfiguration/socgen:configurations/socgen:configuration/socgen:parameters/socgen:parameter/socgen:name")) 
+          foreach my $socgen_cfg ($socgen_file->findnodes("//socgen:componentConfiguration/socgen:configurations/socgen:configuration/socgen:parameters/socgen:parameter/socgen:name")) 
           {
           my($param_name)         = $socgen_cfg->findnodes('./text()')->to_literal ;
           my($param_value)        = $socgen_cfg->findnodes('../socgen:value/text()')->to_literal ;
           my($config_name)        = $socgen_cfg->findnodes('../../../socgen:name/text()')->to_literal ;
-          #print "XXXXXXXQQ  $config_name  $param_name $param_value  \n";  
-
-
           if($config_name eq $configuration  )
             {
             my $repo_data;
             $elab_db->db_get("parameter_${root}__${param_name}", $repo_data );
-            unless ($repo_data)
+            unless (defined $repo_data)
               {
-              #print "XXXXXXXB $param_name ${param_value} \n";
-              $elab_db->db_put( "parameter_${root}__${param_name}","${param_value}"  );
+              $elab_db->db_put( "parameter_${root}__${param_name}","${param_value}"  );            
               }
             }
           }
-     }
-}
+       }
+    }
 
 
 
@@ -267,60 +280,6 @@ my $value;
 
 my @elab_list;
 
-my $cursor = $elab_db ->db_cursor() ;
-while ($cursor->c_get($key, $value, DB_NEXT) == 0) 
-   {
-   #print "ELAB  $key,   $value  \n";
-   ( ${key_type},@elab_list) = split( /\./ , $key);
-
-   if(($key_type eq "component___${root}"))
-      {
-      #print "Component  $key -- $value @elab_list  \n"; 
-      build_hierarchy ($value,"${path}/${destination}",$root,@elab_list);
-      }
-   }
-my $status = $cursor->c_close() ;
-
-
-
-
-$cursor = $elab_db ->db_cursor() ;
-while ($cursor->c_get($key, $value, DB_NEXT) == 0) 
-   {
-   $_ = $key;
-   if(/parameter_${root}(\S+)__(\S+)/) 
-    { 
-    my $xpath = $1; 
-    my $parname = $2;
-    $xpath =~ s/\./\//g;
-    my $file_name = "${path}/${destination}/${root}/${xpath}/Index.db";
-    my $param_db  = new BerkeleyDB::Hash( -Filename => "$file_name", -Flags => DB_CREATE ) or die "Cannot open ${file_name}: $!";
-       $param_db->db_put( "$key","${value}");
-       $param_db->db_close();
-    #print "Parameter $key      ---  ${file_name}   $parname  $value \n";
-    }
-   }
-$status = $cursor->c_close() ;
-
-
-
-$cursor = $elab_db ->db_cursor() ;
-while ($cursor->c_get($key, $value, DB_NEXT) == 0) 
-   {
-   $_ = $key;
-   if(/busInterface_${root}(\S+)__(\S+)/) 
-    { 
-    my $xpath = $1; 
-    my $parname = $2;
-    $xpath =~ s/\./\//g;
-    my $file_name = "${path}/${destination}/${root}/${xpath}/Index.db";
-    my $param_db  = new BerkeleyDB::Hash( -Filename => "$file_name", -Flags => DB_CREATE ) or die "Cannot open ${file_name}: $!";
-       $param_db->db_put( "$key","${value}");
-       $param_db->db_close();
-    #print "busInterface $key      ---  ${file_name}   $parname  $value \n";
-    }
-   }
-$status = $cursor->c_close() ;
 
 
 
@@ -368,7 +327,7 @@ sub elaborate
 
    my $spirit_component_file    = $parser->parse_file(yp::lib::find_ipxact_component($elab_vendor,$elab_library,$elab_component,$elab_version));
 
-   #print "ELABORATING $elab_root  $elab_vendor $elab_library $elab_component $elab_version \n";
+#   print "ELABORATING $elab_root  $elab_vendor $elab_library $elab_component $elab_version \n";
    parse_component_file($spirit_component_file,$elab_root);
    parse_design_files($spirit_component_file,$elab_root);
    #print "Exit $elab_root   \n";
@@ -422,10 +381,14 @@ foreach my $new_comp ($spirit_component_file->findnodes("//spirit:component/spir
         my($parameter_default)  = $i_name ->findnodes('../spirit:value/text()')->to_literal ;
         my $repo_data;
         $elab_db->db_get("parameter_${elab_root}__${parameter_name}", $repo_data );
-        unless ($repo_data)
+
+
+        unless (defined $repo_data)
             {
-            #print "XXXXXXXC $parameter_name ${parameter_default} \n";
+
             $elab_db->db_put( "parameter_${elab_root}__${parameter_name}","${parameter_default}"  );
+
+             
             }
         }
 
@@ -453,7 +416,7 @@ foreach my $new_comp ($spirit_component_file->findnodes("//spirit:component/spir
 #        print "BUS-- ${elab_root}  |||  $name $sense  ===   $value  \n";
         my $repo_data;
         $elab_db->db_get("businterface_${elab_root}__${name}", $repo_data );
-        unless ($repo_data)
+        unless (defined $repo_data)
             {
 #            print "BUS--:::  \n";
             $elab_db->db_put( "busInterface_${elab_root}__${name}","busInterface:${sense}:${value}"  );
@@ -619,6 +582,10 @@ sub parse_design_file
             #print "INSTANCED $instance_name  $vendor_name $library_name $component_name $version_name   \n";
             $elab_db->db_put( "component___${elab_root}.${instance_name}","${vendor_name}:${library_name}:${component_name}:${version_name}"  );
 
+            my $repo_data;
+            $elab_db->db_get("VLNV___${vendor_name}:${library_name}:${component_name}:${version_name}", $repo_data );
+            $elab_db->db_put("VLNV___${vendor_name}:${library_name}:${component_name}:${version_name}","${repo_data}${elab_root}.${instance_name}:::");
+
             if  ($instance_name)
               {  
 
@@ -628,18 +595,46 @@ sub parse_design_file
              {
              my($foo_name)       = $i_parameter ->to_literal ;
              my($foo_value)      = $i_parameter ->findnodes('../text()')->to_literal ;
+
+             $_ = $foo_value;
+             my $t_name;
+             my $t_op;
              my $repo_data;
-             $elab_db->db_get("parameter_${elab_root}__${foo_value}", $repo_data );
-             unless ($repo_data) {$repo_data = $foo_value};
-             #print "PARAMETERE  $foo_name  $foo_value  $repo_data  \n";
+
+             if(/(\S+)[+](\S+)/) 
+              {
+              $t_name = $1;
+              $t_op   = $2;
+              $elab_db->db_get("parameter_${elab_root}__${t_name}", $repo_data );
+              unless  (defined $repo_data) 
+               {
+               $repo_data = $foo_value ;
+               }
+              else
+               {
+               $repo_data = $repo_data + $t_op ;
+               }
+ 
+#              print "GGGGGGGHHHH  $foo_value $t_name $t_op     $repo_data    \n";
+              }
+             else
+              {
+              $elab_db->db_get("parameter_${elab_root}__${foo_value}", $repo_data );
+              unless  (defined $repo_data) 
+               {
+               $repo_data = $foo_value ;
+               }
+              }
+
              $elab_db->db_put( "parameter_${elab_root}.${instance_name}__${foo_name}","${repo_data}"  );
+             $elab_db->db_put( "Parameter_${elab_root}.${instance_name}__${foo_name}","${foo_value}"  );
+
+#             print "PARAMETERE  ${elab_root}.${instance_name}   $foo_name    $repo_data   <- $foo_value  \n";
+
              }
 
              elaborate( "${elab_root}.${instance_name}","${vendor_name}","${library_name}","${component_name}","${version_name}"  );
-
              }
-
-
             }
       }
    }
@@ -683,61 +678,6 @@ sub parse_design_file
 
 
 
-
-
-#/*********************************************************************************************/
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/*********************************************************************************************/
-
-sub build_hierarchy
-   {
-   my @params     = @_;
-   my $vlnv       = shift(@params);
-   my $path       = shift(@params);
-   my $root       = shift(@params);
-   my $top        = shift(@params);
-   my $new_elab_db ;
-   my $new_elab_db_file_name ;
-
-
-
-   #print "Hier  $path \nHier- $root       $top    --- @params  \n";
-   $path ="${path}/${root}";
-   unless(-e $path)
-     {
-     $cmd ="mkdir ${path} \n";
-     if(system($cmd)){}
-     #print "Create Dir  ${path} \n";
-     }
-
-   unless (-e "${path}/${top}")
-     {
-     $cmd ="mkdir ${path}/${top} \n";
-     if(system($cmd)){}
-     }
-
-   $new_elab_db_file_name  = "${path}/${top}/Index.db";
-
-   if(@params)
-     {
-     build_hierarchy ("$vlnv","${path}","${top}",@params);
-     }
-   else
-     {
-     #print "CREATE $new_elab_db_file_name  \n";
-     $new_elab_db  = new BerkeleyDB::Hash( -Filename => "$new_elab_db_file_name", -Flags => DB_CREATE ) or die "Cannot open $new_elab_db_file_name    : $!";
-     $new_elab_db->db_put( "VLNV","${vlnv}"  );
-#     print "VLNV  $vlnv \nVLNV -> $new_elab_db_file_name  \n";
-     }
-
-   return(0);
-
-   }
 
 
 

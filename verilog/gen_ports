@@ -124,7 +124,11 @@ my $path  = "${home}/${io_ports}";
    mkdir $path,0755             unless( -e $path );
    $path  = "${home}/${io_ports}/${vendor}__${library}/${component}";
    mkdir $path,0755             unless( -e $path );
-   $outfile    ="${path}/${main_module_name}";
+   $path  ="${path}/${main_module_name}";
+   mkdir $path,0755             unless( -e $path );
+
+
+   $outfile    ="${path}/busses.txt";
 
    if(-e ${outfile} )
      {
@@ -605,24 +609,25 @@ sub process_design_file
                       unless( looks_like_number($left) ) { $left=0;}
                       }
                   uplift_busref(${hierConn_name},${log_name},${direction},"wire",${vector},${left},${right},"${hierConn_name}_${log_name}");
+
+                $busses_db->db_put( "IXstance.${hierConn_comref_name}.${hierConn_busref_name}.${log_name}","${value}"  );
+
                 }
                elsif (($key eq "AbsDef.${hierConn_busref_name}.master"))
                 {
                 ( ${xx_vendor},${xx_library},${xx_name},${xx_version}) = split ':', $value;
                 $busses_db->db_put( "AbsDef.${hierConn_name}.master","${xx_vendor}:${xx_library}:${xx_name}:${xx_version}"  );
                 $busses_db->db_put( "AbsDef.${hierConn_name}.interconnect","${hierConn_comref_name}..${hierConn_busref_name}::"  );
+                $busses_db->db_put( "Instance.${hierConn_comref_name}.${hierConn_busref_name}","${hierConn_name}"  );
+
                 }
                elsif (($key eq "AbsDef.${hierConn_busref_name}.slave"))
                 {
                 ( ${xx_vendor},${xx_library},${xx_name},${xx_version}) = split ':', $value;
                 $busses_db->db_put( "AbsDef.${hierConn_name}.slave","${xx_vendor}:${xx_library}:${xx_name}:${xx_version}"  );
                 $busses_db->db_put( "AbsDef.${hierConn_name}.interconnect","${hierConn_comref_name}..${hierConn_busref_name}::"  );
+                $busses_db->db_put( "Instance.${hierConn_comref_name}.${hierConn_busref_name}","${hierConn_name}"  );
                 }
-
-
-
-
-
                }
 
                my $status = $child_cursor->c_close() ;
@@ -656,7 +661,6 @@ sub process_design_file
            $busses_db->db_get( "AbsDef.${lp_interconnect_name}.interconnect" , $repo_data );
            $busses_db->db_put( "AbsDef.${lp_interconnect_name}.interconnect","${lp_componentref_name}..${lp_busref_name}::${repo_data}"  );
            $busses_db->db_put( "Instance.${lp_componentref_name}.${lp_busref_name}","${lp_interconnect_name}"  );
-
            }
 
 
@@ -680,13 +684,6 @@ sub process_design_file
         my($hierConn_comref_name)            = $i_name ->to_literal;
         my($hierConn_busref_name)            = $i_name ->findnodes('../@spirit:busRef')->to_literal ;
         my($hierConn_name)                   = $i_name ->findnodes('../../spirit:name/text()')->to_literal ;
-
-
-
-
-
-
-
 
 
      #/*******************************************************************************/
@@ -769,6 +766,11 @@ sub process_design_file
                 {
 #                 print "INTERCONN  ${hierConn_name}_${log_name}      $direction , $vector, $left , $right  \n";
                  uplift_busref(${hierConn_name},${log_name},"node","wire",${vector},${left},${right},"${hierConn_name}_${log_name}");
+
+                $busses_db->db_put( "IXstance.${hierConn_comref_name}.${hierConn_busref_name}.${log_name}","${value}"  );
+
+
+
                 }
                elsif(($key eq "AbsDef.${hierConn_busref_name}.master"))
                 {
@@ -848,14 +850,18 @@ sub process_design_file
      #/*                                                                    */
      #/**********************************************************************/
 
+
+
      foreach  my   $i_name ($spirit_design_file->findnodes('//spirit:adHocConnections/spirit:adHocConnection/spirit:internalPortReference/@spirit:componentRef'))
         {
         my($componentRef_name)      = $i_name ->to_literal;
-        my($int_portRef_name)       = $i_name ->findnodes('../@spirit:portRef')->to_literal ;
         my($adhocConnection_name)   = $i_name ->findnodes('../../spirit:name/text()')->to_literal ;
+        my($tied_value)             = $i_name ->findnodes('../../@spirit:tiedValue')->to_literal ;
+        my($int_portRef_name)       = $i_name ->findnodes('../@spirit:portRef')->to_literal ;
         my($ext_portRef_name)       = $i_name ->findnodes('../../spirit:externalPortReference/@spirit:portRef')->to_literal ;
         my($left)                   = $i_name ->findnodes('../../spirit:externalPortReference/@spirit:left')->to_literal ;
         my($right)                  = $i_name ->findnodes('../../spirit:externalPortReference/@spirit:right')->to_literal ;
+
 
         if(  $left ne "" ) 
           { 
@@ -869,6 +875,27 @@ sub process_design_file
           $right  = "none";
           }
 
+
+
+          if ( ${adhocConnection_name} eq "" )  { $adhocConnection_name = "***";}
+          if (  ${ext_portRef_name} eq ""    )  { $ext_portRef_name     = "***";}
+
+
+#print "NNNNNNNNNN $componentRef_name $adhocConnection_name ||${tied_value}||  $int_portRef_name $ext_portRef_name $left $right \n";
+
+        if($tied_value )
+          { 
+          $busses_db->db_put( "AdHoc_${componentRef_name}__${int_portRef_name}","${tied_value}:${ext_portRef_name}:${type}:${vector}:${left}:${right}"  );
+
+#print"NNNNNNNNNNNNN  AdHoc_${componentRef_name}__${int_portRef_name}    ${tied_value}:${ext_portRef_name}:${type}:${vector}:${left}:${right}\n"  ;
+
+          }
+         else
+          {
+          $busses_db->db_put( "AdHoc_${componentRef_name}__${int_portRef_name}","${adhocConnection_name}:${ext_portRef_name}:${type}:${vector}:${left}:${right}"  );
+#          print "NNNNNNNNN   AdHoc_${componentRef_name}__${int_portRef_name}    ${adhocConnection_name}:${ext_portRef_name}:${type}:${vector}:${left}:${right} \n"  ;
+
+
         $_ = ${adhocConnection_name};
         if(/(\w+)/)   
             {        
@@ -879,6 +906,10 @@ sub process_design_file
                   uplift_busref("adhoc", ${adhocConnection_name} , "node" , "wire" , ${vector}, ${left} , ${right}, ${adhocConnection_name});
                   }
             }
+
+          }
+
+
         }
 }
 

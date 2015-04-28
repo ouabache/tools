@@ -96,6 +96,7 @@ my $library  ;
 
 
 my $prefix = yp::lib::get_workspace();
+my $number_of_cpus = yp::lib::get_number_of_cpus();
 
 $_               = $ARGV[0];
 
@@ -142,7 +143,7 @@ foreach my $component (@components)
    #/*********************************************************************************************/
 my $cmd;
 my @cmds = ();
-my $manager = new Parallel::ForkManager( 6 );
+my $manager = new Parallel::ForkManager( $number_of_cpus );
 
 
    foreach  my   $i_name ($socgen_file->findnodes("//socgen:componentConfiguration/socgen:sim/socgen:icarus/socgen:test/socgen:name"))

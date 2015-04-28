@@ -92,6 +92,8 @@ if ( $opt_h or $opt_help )   { print "\n build_generate -prefix /work -vendor ve
 
 my $home = cwd();
 
+my @cmd_list  = ();
+
 
 #############################################################################
 ## 
@@ -100,8 +102,6 @@ my $home = cwd();
 
 
 
-
-#print "\n FFFFFFFFFFFF        GENERATE  $prefix  $vendor  $library  $component $version \n" ;
 
 
 my $parser = XML::LibXML->new();
@@ -134,7 +134,7 @@ foreach $line (@filelist)
      $new_component      = $3;
      $new_vendor         = $1;
      $new_version        = $4;                
-#     print " FFFFFFFFFFFFFFFF  Brother      $new_vendor  $new_library  $new_component $new_version \n" ;
+
 
      my $spirit_component_file    = $parser->parse_file(yp::lib::find_ipxact_component($new_vendor,$new_library,$new_component,$new_version));
 
@@ -142,7 +142,7 @@ foreach $line (@filelist)
        {
        my($gen_name)            = $i_name ->findnodes('../spirit:name/text()')->to_literal ;
        my($gen_generatorExe)    = $i_name ->findnodes('../spirit:generatorExe/text()')->to_literal ;
-#       print " FFFFFFFFFFFFFFFF    $gen_name     $gen_generatorExe    \n" ;
+       my($gen_phase)           = $i_name ->findnodes('../spirit:phase/text()')->to_literal ;
 
        my $cmd;   
        $cmd = "   -prefix $prefix -vendor $vendor     -library $library  -component $component -version $version  ";
@@ -165,13 +165,25 @@ foreach $line (@filelist)
           my $New_cmd =  "  ${gen_generatorExe}  -envidentifier $gen_envidentifier      ${cmd}\n";
           if(${gen_generatorExe} ) 
               {
-              if (system($New_cmd)) {}
+              push  @cmd_list, "${gen_phase}::$New_cmd";
+#              if (system($New_cmd)) {}
               }
           }
        }
      }
    }
 
+@cmd_list      = sys::lib::trim_sort(@cmd_list);
+my $cmd;
+my $phase;
+
+foreach my $Cmd_line (@cmd_list)
+{
+
+( $phase,$cmd) = split( /\::/ , $Cmd_line);
+
+if (system($cmd)) {}
+}
 
 
 

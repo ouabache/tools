@@ -75,7 +75,8 @@ GetOptions("h","help",
            "version=s"       => \$version,
            "path=s"          => \$path,
            "bus_name=s"      => \$bus_name,
-           "test_name=s"      => \$test_name
+           "test_name=s"      => \$test_name,
+           "dest_dir=s"      => \$dest_dir
           
     
 
@@ -86,7 +87,7 @@ GetOptions("h","help",
 ## Help option
 ##############################################################################
 if ( $opt_h  or $opt_help  ) 
-  { print "\n trace_bus -envidentifier {sim/syn}  -prefix /work -vendor vendor_name -library library_name  -component component_name  -version version_name -path root.dut.core.cpu -bus_name cpu     \n";
+  { print "\n trace_bus -envidentifier {sim/syn}  -prefix /work -vendor vendor_name -library library_name  -component component_name  -version version_name -path root.dut.core.cpu -bus_name cpu -dest_dir dest_dir    \n";
     exit 1;
   }
 
@@ -116,10 +117,17 @@ unless ($path)
 
 
 my   $variant;
-my   $dest_dir            = "elab";
-my   $destination         = "${component}_${version}";
+unless(defined   $dest_dir  ){ $dest_dir            = "elab";}
 
-if($test_name){ $destination         = "${component}_${version}_${test_name}";}
+my $main_module_name = yp::lib::get_module_name($vendor,$library,$component,$version);
+
+my   $destination         = "${main_module_name}";
+
+if($test_name)
+  { 
+  $destination         = "${destination}_${test_name}";
+  }
+
 
 my @reg_list ="";
 my @param_list ="";
@@ -142,8 +150,35 @@ my $socgen_file              = $parser->parse_file(yp::lib::find_componentConfig
 my $comp_xml_sep    = yp::lib::find_comp_xml_sep($vendor,$library,$component,$version);
 my $lib_comp_sep    = yp::lib::find_lib_comp_sep($vendor,$library,$component);
 
+my $root_path;
+if($dest_dir eq "elab")
+{
+ $root_path  = "${home}${prefix}/${vendor}__${library}${lib_comp_sep}${component}${comp_xml_sep}/../${dest_dir}";
+}
+else
+{
+ $root_path  = "${home}/${dest_dir}";
+}
 
-my $root_path  = "${home}${prefix}/${vendor}__${library}${lib_comp_sep}${component}${comp_xml_sep}/../${dest_dir}/${destination}";
+
+ unless( -e $root_path )
+      {
+      print "$root_path does not exist... creating \n";
+      my $cmd = "mkdir $root_path \n";
+      if(system($cmd)){};
+      }
+
+
+ $root_path  = "${root_path}/${destination}";
+
+
+ unless( -e $root_path )
+      {
+      print "$root_path does not exist... creating \n";
+      my $cmd = "mkdir $root_path \n";
+      if(system($cmd)){};
+      }
+
 
 
 my $sw_dir     = "${root_path}/sw";
@@ -168,7 +203,7 @@ $output_file =~s/root.dut.//;
 open DEST_FILE,">$output_file" or die "unable to open $output_file";
 
 
-my $data_db_file  = "${root_path}/root.db";
+my $data_db_file  = "${home}/dbs/${vendor}_${library}_${component}_${version}.db";
 
 
 unless(-e  $data_db_file  )
@@ -195,13 +230,9 @@ my $bd_version;
 $root_db->db_get("component___${path}", $comp_data );
 ( $vendor,$library,$component,$version) = split( /\:/ , $comp_data);
 
-#print "XXXXX  $path      $vendor $library $component $version  $bus_name  \n";
 
-my $instance_path     = yp::lib::get_io_ports;  
 
-my $main_module_name  = yp::lib::get_module_name($vendor,$library,$component,$version);
-
-my $instance_db_file  = "${instance_path}/${vendor}__${library}/${component}/${main_module_name}_BUSSES.dbm";
+my $instance_db_file  = yp::lib::get_io_busses_db_filename($vendor,$library,$component,$version);
 
 
 
@@ -316,10 +347,10 @@ sub follow_bus
 
 #   print "QQQQQQ  $path    ||  $vendor $library $component $version ==  $bus_name  \n";
 
-   my $main_module_name = yp::lib::get_module_name($vendor,$library,$component,$version);
 
-   my $instance_path     = yp::lib::get_io_ports;  
-   my $instance_db_file  = "${instance_path}/${vendor}__${library}/${component}/${main_module_name}_BUSSES.dbm";
+
+
+   my $instance_db_file  = yp::lib::get_io_busses_db_filename($vendor,$library,$component,$version);
 
    unless(-e  $instance_db_file  )
         {

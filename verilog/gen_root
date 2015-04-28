@@ -67,25 +67,30 @@ $OUTPUT_AUTOFLUSH = 1; # set autoflush of stdout to TRUE.
 ############################################################################
 Getopt::Long::config("require_order", "prefix=-");
 GetOptions("h","help",
+           "envidentifier=s" => \$envidentifier,
            "prefix=s" => \$prefix,
            "vendor=s" => \$vendor,
            "library=s" => \$library,
-           "version=s" => \$version,
            "component=s" => \$component,
-           "verbose"
+           "version=s" => \$version,
+           "configuration=s" => \$configuration,
+           "dest_dir=s" => \$dest_dir,
+           "env=s" => \$env,
+           "tool=s" => \$tool,
+           "unit=s" => \$unit,
+           "name=s" => \$name
+
 ) || die "(use '$program_name -h' for help)";
+
 
 
 ##############################################################################
 ## Help option
 ##############################################################################
 if ( $opt_h  or $opt_help  ) 
-  { print "\n read_elab -prefix prefix   -vendor vendor -library library  -component component  -version version \n";
+  { print "\n gen_root -envidentifier {sim/syn}  -prefix /work -vendor vendor_name -library library_name  -component component_name  -version version_name -env env -tool tool -unit unit -name name     \n";
     exit 1;
   }
-
-
-
 
 
 
@@ -97,15 +102,19 @@ if ( $opt_h  or $opt_help  )
 $home = cwd();
 
 unless ($prefix)
-  {
-  $prefix   = yp::lib::get_workspace();
-  $prefix   = "/${prefix}";
-  }
-my   $variant;
-my   $configuration;
+ {
+ $prefix   = yp::lib::get_workspace();
+ $prefix   =  "/${prefix}";
+ }
 
-my $dest_dir            = "elab";
-my $destination         = "${component}_${version}";
+
+my   $variant;
+
+
+
+
+
+my $destination       = yp::lib::get_module_name($vendor,$library,$component,$version);  
 
 unless ($env ) {$env = "none";}
 unless ($tool ){$tool = "none";}
@@ -117,9 +126,11 @@ if($name)
   }
 else
   {
-  $name          = $version;
+#  $name          = $version;
   $destination   = "${destination}";
   }
+
+
 
 
 my $root                =      "root";
@@ -127,7 +138,7 @@ my $root                =      "root";
 if($version)       {$variant   = "${component}_${version}";}
 else               {$variant   = "${component}";}
 
-print "read_elab     -prefix prefix -vendor $vendor -library $library -component $component -version $version -env $env -tool $tool -unit $unit -name $name     \n";
+#print "GEN_ROOT -prefix $prefix -vendor $vendor -library $library -component $component -version $version   -env $env -tool $tool -unit $unit -name $name     \n";
 
 
 my $parser = XML::LibXML->new();
@@ -142,78 +153,127 @@ my $comp_xml_sep    = yp::lib::find_comp_xml_sep($vendor,$library,$component,$ve
 my $lib_comp_sep    = yp::lib::find_lib_comp_sep($vendor,$library,$component);
 
 
-#print "lib_comp_sep   $lib_comp_sep \n";
-#print "comp_xml_sep   $comp_xml_sep \n";
+$dest_dir = yp::lib::get_io_ports();
+
+my $path  = "${home}/${dest_dir}";
+
+
+  
+mkdir $path,0755      unless( -e $path );
+
+$path ="${path}/${vendor}__${library}"; 
+mkdir $path,0755    unless( -e $path );
+$path ="${path}/${component}";
+
+mkdir $path,0755    unless( -e $path );
 
 
 
-
-my $path  = "${home}${prefix}/${vendor}__${library}${lib_comp_sep}${component}${comp_xml_sep}/../${dest_dir}/${destination}";
-
-unless( -e $path )
-        {
-        print "$path does not exist \n";
-        return(1);
-        }
+  unless( -e "${path}/${destination}" )
+      {
+#      print "$path/${destination} does not exist... creating \n";
+      my $cmd = "mkdir $path/${destination}  \n";
+      if(system($cmd)){};
+      }
 
 
 
+if(defined $name)
+{
+$data_db_file  = "${home}/dbs/${vendor}_${library}_${component}_${version}_${name}.db";
+}
+else
+{
+$data_db_file  = "${home}/dbs/${vendor}_${library}_${component}_${version}.db";
+}
 
-$data_db_file  = "${path}/${root}.db";
-
-if(-e  $data_db_file  )
-        {
-        print "$data_db_file  does exist  \n";
-        }
-
-
-my $elab_db  = new BerkeleyDB::Hash( -Filename => "$data_db_file", -Flags => DB_CREATE ) or die "Cannot open ${data_db_file}: $!";
-
-
-
+#print "ELAB_XXXX gen_root $data_db_file  \n";
+my $elab_db  = new BerkeleyDB::Hash( -Filename => "$data_db_file", -Flags => DB_CREATE ) or die "Cannot open $data_db_file: $!";
 
 
-   my $key;
-   my $value;
+my $root                =      "root";
+
+my $key;
+my $value;
 
 
+my @elab_list;
 
-   my @elab_list;
-
-   my $cursor = $elab_db ->db_cursor() ;
-   while ($cursor->c_get($key, $value, DB_NEXT) == 0) 
+my $cursor = $elab_db ->db_cursor() ;
+while ($cursor->c_get($key, $value, DB_NEXT) == 0) 
    {
-#   print "ELAB  $key,   $value  \n";
-                 ( ${key_type},@elab_list) = split( /\./ , $key);
-#                 ( ${log_name},${direction},${type},${vector},${left},${right},${phy_name}) = split ':', $value;
-                 if(($key_type eq "component___${root}"))
-                    {
-                    print "Component  $key -- $value @elab_list  \n"; 
-                    build_hierarchy ($value,$path,$root,@elab_list);
-                    }
-                 else
-                    {
 
-                    }
+   ( ${key_type},@elab_list) = split( /\./ , $key);
+
+   if(($key_type eq "component___${root}"))
+      {
+
+      build_hierarchy ($value,"${path}/${destination}",$root,@elab_list);
+      }
+   }
+my $status = $cursor->c_close() ;
+
+
+
+
+$cursor = $elab_db ->db_cursor() ;
+while ($cursor->c_get($key, $value, DB_NEXT) == 0) 
+   {
+   $_ = $key;
+   if(/parameter_${root}__(\S+)/) 
+    { 
+    my $file_name = "${path}/${destination}/${root}/Index.db";
+    my $param_db  = new BerkeleyDB::Hash( -Filename => "$file_name", -Flags => DB_CREATE ) or die "Cannot open ${file_name}: $!";
+       $param_db->db_put( "$key","${value}");
+       $param_db->db_close();
+    }
+   elsif (/parameter_${root}(\S+)__(\S+)/)
+    { 
+    my $xpath = $1; 
+    $xpath =~ s/\./\//g;
+    my $file_name = "${path}/${destination}/${root}/${xpath}/Index.db";
+    my $param_db  = new BerkeleyDB::Hash( -Filename => "$file_name", -Flags => DB_CREATE ) or die "Cannot open ${file_name}: $!";
+       $param_db->db_put( "$key","${value}");
+       $param_db->db_close();
+    }
+   }
+$status = $cursor->c_close() ;
+
+
+
+$cursor = $elab_db ->db_cursor() ;
+while ($cursor->c_get($key, $value, DB_NEXT) == 0) 
+   {
+   $_ = $key;
+   if(/busInterface_${root}__(\S+)/) 
+    { 
+    my $file_name = "${path}/${destination}/${root}/Index.db";
+    my $param_db  = new BerkeleyDB::Hash( -Filename => "$file_name", -Flags => DB_CREATE ) or die "Cannot open ${file_name}: $!";
+       $param_db->db_put( "$key","${value}");
+       $param_db->db_close();
+    }
+   elsif(/busInterface_${root}(\S+)__(\S+)/) 
+    { 
+    my $xpath = $1; 
+    my $parname = $2;
+    $xpath =~ s/\./\//g;
+    my $file_name = "${path}/${destination}/${root}/${xpath}/Index.db";
+    my $param_db  = new BerkeleyDB::Hash( -Filename => "$file_name", -Flags => DB_CREATE ) or die "Cannot open ${file_name}: $!";
+       $param_db->db_put( "$key","${value}");
+       $param_db->db_close();
+    }
+
+
+
 
    }
-
-   my $status = $cursor->c_close() ;
-
+$status = $cursor->c_close() ;
 
 
-   $elab_db   -> db_close();
-
-#   @bus_list      = sys::lib::trim_sort(@bus_list);
+$elab_db->db_close();
 
 
-#    foreach $list (@bus_list)   { print   "${list}\n";}
-#
 
-
-#my @busses  = yp::lib::get_busses($vendor,$library,$component,$version);
-
-#    foreach $list (@busses) {  print   "${list}\n";  }
 
 
 
@@ -245,7 +305,7 @@ sub build_hierarchy
      {
      $cmd ="mkdir ${path} \n";
      if(system($cmd)){}
-     print "Create Dir  ${path} \n";
+#     print "Create Dir  ${path} \n";
      }
 
    unless (-e "${path}/${top}")
@@ -262,10 +322,10 @@ sub build_hierarchy
      }
    else
      {
-     print "CREATE $new_elab_db_file_name  \n";
+#     print "CREATE $new_elab_db_file_name  \n";
      $new_elab_db  = new BerkeleyDB::Hash( -Filename => "$new_elab_db_file_name", -Flags => DB_CREATE ) or die "Cannot open $new_elab_db_file_name    : $!";
      $new_elab_db->db_put( "VLNV","${vlnv}"  );
-     print "VLNV  $vlnv \nVLNV -> $new_elab_db_file_name  \n";
+#     print "VLNV  $vlnv \nVLNV -> $new_elab_db_file_name  \n";
      }
 
    return(0);

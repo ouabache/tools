@@ -76,7 +76,6 @@ GetOptions("h","help",
            "dest_dir=s" => \$dest_dir,
            "destination=s" => \$destination,
            "configuration=s" => \$configuration,
-           "autodoc=s"   => \$autodoc,
            "fragment","no_port","local_parameters","tb","debug","verbose","interface_only","top"
 ) || die "(use '$program_name -h' for help)";
 
@@ -89,7 +88,7 @@ if ( $opt_h  or $opt_help  )
     exit 1;
   }
 
-my $main_module_name = yp::lib::get_module_name($vendor,$library,$component,$version) ;
+
 
 #############################################################################
 ## 
@@ -102,29 +101,24 @@ $home = cwd();
 my $variant;
 my $view;
 
-
-my $interface_in_count   =0;
-my $interface_out_count  =0;
-my $interface_in_size    =0;
-my $interface_out_size   =0;
-
 if($version)       {$variant   = "${component}_${version}";}
 else               {$variant   = "${component}";}
 
 unless($destination) { $destination = $variant;}
-unless($autodoc)     { $autodoc     = "/Geda";}
+unless($configuration) { $configuration = "default";}
+
+
 
 print "\n GEN_verilog    -envidentifier $envidentifier -prefix  $prefix -vendor $vendor -library $library -component $component -version $version -configuration $configuration -dest_dir     $dest_dir -destination  $destination   \n";
 
-my $lib_comp_sep    = yp::lib::find_lib_comp_sep($vendor,$library,$component);
-my $comp_xml_sep    = yp::lib::find_comp_xml_sep($vendor,$library,$component,$version);
+my $main_module_name = yp::lib::get_module_name($vendor,$library,$component,$version) ;
+my $lib_comp_sep     = yp::lib::find_lib_comp_sep($vendor,$library,$component);
+my $comp_xml_sep     = yp::lib::find_comp_xml_sep($vendor,$library,$component,$version);
 
 my $parser = XML::LibXML->new();
 
 my $socgen_file              = $parser->parse_file(yp::lib::find_componentConfiguration($vendor,$library,$component));
 my $spirit_component_file    = $parser->parse_file(yp::lib::find_ipxact_component($vendor,$library,$component,$version));
-my $doc_library_path         = $socgen_file->findnodes("//socgen:componentConfiguration/socgen:doc/socgen:library_path/text()")->to_literal;
-
 
 my $sim_library_path ;
 
@@ -133,18 +127,11 @@ my $sim_comp_path            = $socgen_file->findnodes("//socgen:componentConfig
 if ($sim_comp_path)  {$sim_library_path  ="${lib_comp_sep}${sim_comp_path}";}
 else                 {$sim_library_path  = $socgen_file->findnodes("//socgen:componentConfiguration/socgen:sim/socgen:library_path/text()")->to_literal;}
 
-foreach my $X_view ($spirit_component_file->findnodes('//spirit:component/spirit:model/spirit:views/spirit:view')) 
+
+foreach my $X_view ($spirit_component_file->findnodes("//spirit:component/spirit:model/spirit:views/spirit:view/spirit:envIdentifier[text() = '$envidentifier']")) 
          {
-         my($Xview_name)   = $X_view->findnodes('./spirit:name/text()')->to_literal ;
-         my($Xview_envidentifier)   = $X_view->findnodes('./spirit:envIdentifier/text()')->to_literal ;
-
-
-         if($envidentifier eq $Xview_envidentifier ) 
-              { 
-              $view = $Xview_name;
-              }            
-         } 
-
+         $view   = $X_view->findnodes('../spirit:name/text()')->to_literal ;
+         }
 
 my $path  = "${home}${prefix}/${vendor}__${library}${lib_comp_sep}${component}${comp_xml_sep}/${dest_dir}";
 mkdir $path,0755             unless( -e $path );
@@ -152,85 +139,38 @@ mkdir $path,0755             unless( -e $path );
 my $path  = "${home}${prefix}/${vendor}__${library}${lib_comp_sep}${component}${comp_xml_sep}/${dest_dir}/${view}";
 mkdir $path,0755             unless( -e $path );
 
-my   @filelist_hier     =       ();
+
 my   @instantiations    =       ();
 my   @parameters        =       ();
 my   %parameter_values  =       ();
 my   %parameter_descriptions  = ();
 
+unless ($socgen_file)      { print "No socgen ip file   \n";};
+
+#/******************************************************************************************/
+#/*                                                                                        */
+#/* get parameters                                                                         */
+#/*                                                                                        */
+#/******************************************************************************************/
 
 
-      unless ($socgen_file)      { print "No socgen ip file   \n";};
+my @Pams = yp::lib::get_parameters($vendor,$library,$component,$version,$configuration);
 
-     #/******************************************************************************************/
-     #/*                                                                                        */
-     #/* if local parameters check for uplifts                                                  */
-     #/*                                                                                        */
-     #/******************************************************************************************/
+foreach my $Pam (@Pams)
+{
+my $param_name;
+my $param_value;
 
-    if($opt_local_parameters)
-      {
-#       print "XXX Reading local parameters \n";
-       foreach  my   $socgen_cfg ($socgen_file->findnodes("//socgen:componentConfiguration/socgen:syn/socgen:ise/socgen:chip/socgen:parameters/socgen:parameter"))
-          {
-          my($ise_param_value)       = $socgen_cfg ->findnodes('./socgen:value/text()')->to_literal ;
-          my($ise_param_name)        = $socgen_cfg ->findnodes('./socgen:name/text()')->to_literal ;
-          my($ise_new_version   )    = $socgen_cfg ->findnodes('../../socgen:version/text()')->to_literal ;
-          if($variant eq "${component}_${ise_new_version}")
-              {         
-#               print "XXXXXXX $ise_param_name  $ise_param_value           $ise_new_version     \n";
-               unless(defined $parameter_values{$ise_param_name}) {push ( @parameters,  "$ise_param_name");};
-               $parameter_values{$ise_param_name} = $ise_param_value;
-              }
-          }
-
-
- 
-     }
+( $param_name,$param_value) = split( /\::/ , $Pam); 
+unless(defined $parameter_values{$param_name}) {push ( @parameters,  "$param_name");};
+$parameter_values{$param_name} = $param_value;
+}
 
 
 
 
-
-
-     #/******************************************************************************************/
-     #/*                                                                                        */
-     #/* if configuration set then read parameters from socgen:componentConfiguration file      */
-     #/*                                                                                        */
-     #/******************************************************************************************/
-
-    if($configuration)
-      {
-      # print "XXX Reading configuration   $configuration \n";
-
-
-      foreach my $socgen_cfg ($socgen_file->findnodes("//socgen:componentConfiguration/socgen:configurations/socgen:configuration/socgen:parameters/socgen:parameter/socgen:name")) 
-                {
-                my($param_name)         = $socgen_cfg->findnodes('./text()')->to_literal ;
-                my($param_value)        = $socgen_cfg->findnodes('../socgen:value/text()')->to_literal ;
-                my($config_name)        = $socgen_cfg->findnodes('../../../socgen:name/text()')->to_literal ;
-                if($config_name eq $configuration  )
-                  {
-                  unless(defined $parameter_values{$param_name}) 
-                     {
-                     push ( @parameters,  "$param_name");
-                     $parameter_values{$param_name} = ${param_value};
-                     }
-
-                  }
-                }
-     }
-
-
-    my @signals = yp::lib::get_signals($vendor,$library,$component,$version);
+my @signals = yp::lib::get_signals($vendor,$library,$component,$version);
    
-
-
-
-
-
-
-
 
 
 #/**********************************************************************/
@@ -252,30 +192,63 @@ foreach my $comp_view ($spirit_component_file->findnodes("//spirit:component/spi
 
    unless ($opt_fragment){     print DEST_FILE  "\n module \n\n  $main_module_name \n ";}
 
-   #/*****************************************************************************/
-   #/*  wire_decs array holds all port and signal declarations                   */
-   #/*  :::name:::node_input_output:::wire_reg:::scaler_vector:::left:::right::: */   
-   #/*****************************************************************************/
+   my @I_names = yp::lib::get_instance_names($vendor,$library,$component,$version,$configuration);
+ 
+   foreach my $I_name (@I_names)
+        {
+        my $module_name  = yp::lib::get_instance_module_name($vendor,$library,$component,$version,$I_name,$configuration);
+        push @instantiations  ,          "${module_name}\n";
+        $first = 1;
+        my @Pams = yp::lib::get_Parameters($vendor,$library,$component,$version,"root.${I_name}",$configuration);
+        foreach my $pam (@Pams)
+          {
+          ( $foo_name,$foo_value) = split( /\::/ , $pam); 
+          if($first)
+            {
+            push @instantiations  , "#( .${foo_name} (${foo_value})";
+            $first = 0;         
+            }  
+          else  {push @instantiations  , ",\n   .${foo_name} (${foo_value})";}  
+          }
+ 
+          if($first == 0)  { push @instantiations  , ")\n";}
+          push @instantiations  , "$I_name \n   (\n ";
+          $first = 1;
+ 
+          my @Inst_conns = yp::lib::get_instance_adhoc_conns($vendor,$library,$component,$version,$I_name);
+          my @Buss_conns = yp::lib::get_instance_conns($vendor,$library,$component,$version,$I_name);
+          foreach my $Buss_conn (@Buss_conns)
+             {
+             if($first)
+               {
+               push @instantiations  ,          "  $Buss_conn";
+               $first =0;
+               }
+             else   
+               {           
+               push @instantiations  , ",\n   $Buss_conn";
+               }
+             }
+          foreach my $Inst_conn (@Inst_conns)
+             {
+             if($first)
+               {
+               push @instantiations  ,          "  $Inst_conn";
+               $first =0;
+               }
+             else   
+               {           
+               push @instantiations  , ",\n   $Inst_conn";
+               }
+             }
+        push @instantiations  , ");\n\n";         
+        }
+ 
 
-   @wire_decs = (  );
-
-
-   #/**********************************************************************/
-   #/*  inst_conns holds all instance connections                         */
-   #/**********************************************************************/
-
-   @inst_conns = (  );
 
 
 
-   #  component file
 
-   parse_component_file($spirit_component_file);
-   if($opt_verbose){print "parse design files \n"; }
-   parse_design_files($spirit_component_file);
-   if($opt_verbose){print "process design files \n"; }
-   process_design_files($spirit_component_file);
-   if($opt_verbose){print "process wire_decs \n"; }
 
  
    #/**********************************************************************/
@@ -301,6 +274,14 @@ foreach my $comp_view ($spirit_component_file->findnodes("//spirit:component/spi
      if    ($first == 0)   { print DEST_FILE  ")\n"; }
        }
       
+if($opt_verbose)
+  {
+  foreach my $Pam (@Pams)
+      {
+      print DEST_FILE  "//*** $Pam  ***/ \n";  
+      }  
+  }
+
 
    #/**********************************************************************/
    #/*                                                                    */
@@ -423,1041 +404,8 @@ foreach my $comp_view ($spirit_component_file->findnodes("//spirit:component/spi
           }
         }
      }
-     unless ($opt_fragment ) {print DEST_FILE  "\n\n\n  endmodule\n\n";}   
-     
+     unless ($opt_fragment ) {print DEST_FILE  "\n\n\n  endmodule\n\n";}        
    }
-
-
-
-
-
-#/*********************************************************************************************/
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/*********************************************************************************************/
-
-
-
-
-sub parse_busInterface 
-   {
-   my @params     = @_;
-   my $depth      = pop(@params);
-   my $busref     = pop(@params);
-   my $version    = pop(@params);
-   my $component  = pop(@params);
-   my $library    = pop(@params);
-   my $vendor     = pop(@params);
-
-   my $home = cwd();
-
-   my @out_stack  = ();
-
-  if($opt_verbose){print "parse_busInterface $vendor $library $component $version \n"; }
-
-
-
-   my $busInterfaceTest = 0;
-
-
-
-
-my  @filelist =       yp::lib::parse_component_brothers("$vendor","$library","$component","$version");
-
-foreach $line (@filelist) 
-   {
-   $_ = $line;
-   if(/::(\S+)::(\S+)::(\S+)::(\S+)::/) 
-     { 
-     $new_library        = $2;
-     $new_component      = $3;
-     $new_vendor         = $1;
-     $new_version        = $4;                
-
-#     print " FFFFFFFFFFFFFFFF  Brother      $new_vendor  $new_library  $new_component $new_version \n" ;
-
-    my $spirit_component_file    = $parser->parse_file(yp::lib::find_ipxact_component($new_vendor,$new_library,$new_component,$new_version));
-
-
-   my @mas_slave;
-     push @mas_slave  , "master"; 
-     push @mas_slave  , "slave"; 
-
-     foreach my $seek_type (@mas_slave) 
-        { 
-
-#print  "XXXXCX   Component $new_vendor $new_library $new_component $new_version  $seek_type \n";
-
-     foreach my $bus_iface ($spirit_component_file->findnodes("//spirit:component/spirit:busInterfaces/spirit:busInterface/spirit:${seek_type}")) 
-        {
-        my($fff_cname)         = $bus_iface->findnodes('../spirit:name/text()')->to_literal ;
-        my($fff_vendor)        = $bus_iface->findnodes('../spirit:abstractionType/@spirit:vendor')->to_literal ;
-        my($fff_library)       = $bus_iface->findnodes('../spirit:abstractionType/@spirit:library')->to_literal ;
-        my($fff_name)          = $bus_iface->findnodes('../spirit:abstractionType/@spirit:name')->to_literal ;
-        my($fff_version)       = $bus_iface->findnodes('../spirit:abstractionType/@spirit:version')->to_literal ;
-
-
-       if( $busref eq   $fff_cname )
-         {
-        my $absDef_filename = yp::lib::get_absDef_db_filename($fff_vendor,$fff_library,$fff_name,$fff_version);
-        $absDef_db   = new BerkeleyDB::Hash( -Filename => $absDef_filename, -Flags => DB_CREATE ) or die "Cannot open ${absDef_filename}: $!";
-
-
-        foreach my $port_face ($spirit_component_file->findnodes('//spirit:component/spirit:busInterfaces/spirit:busInterface/spirit:portMaps/spirit:portMap/spirit:logicalPort')) 
-           {
-           my($fff_log_name)      = $port_face->findnodes('./spirit:name/text()')->to_literal ;
-           my($fff_int_name)      = $port_face->findnodes('../../../spirit:name/text()')->to_literal ;
-           my($fff_phy_name)      = $port_face->findnodes('../spirit:physicalPort/spirit:name/text()')->to_literal ;
-           my($fff_type_name)     = $port_face->findnodes('../spirit:physicalPort/spirit:wireTypeDefs/spirit:wireTypeDef/spirit:typeName/text()')->to_literal ;
-           my($fff_left_value)    = $port_face->findnodes('../spirit:physicalPort/spirit:wire/spirit:vector/spirit:left/text()')->to_literal ;
-           my($fff_right_value)   = $port_face->findnodes('../spirit:physicalPort/spirit:wire/spirit:vector/spirit:right/text()')->to_literal ;
-
-           unless ($fff_type_name)  {$fff_type_name = "wire";};
-
-
-
-           my $abs_data;
-           $absDef_db->db_get("${seek_type}__${fff_log_name}", $abs_data );
-
-           ( $berk_name, $berk_presence,$berk_width,$fff_direction ) = split ':', $abs_data;
-
-           if(  ( $fff_int_name  eq  $busref)     )
-             {
-             $busInterfaceTest = 1;
-#             print "XXXCXX $fff_log_name $seek_type  $fff_direction  \n";
-
-                  if($fff_left_value ne "") 
-                    { push @out_stack, ":::${depth}:::${fff_log_name}:::${fff_phy_name}:::${fff_direction}:::${fff_type_name}:::vector:::${fff_left_value}:::${$fff_right_value}:::"; }
-                  else              
-                    { push @out_stack, ":::${depth}:::${fff_log_name}:::${fff_phy_name}:::${fff_direction}:::${fff_type_name}:::scaler:::none:::none:::";    }                  
-                
-
-             }
-
-           }
-
-#       print "XXXCXX CLOSE  ${fff_vendor}_${fff_library}_${fff_name}_${fff_version}  \n";
-
-
-
-
-
-
-       $absDef_db->db_close();              
-
-      }
-
-
-
-
-
-
-       }   
-
-}
-
-
-}
-
-}
-
-
-       if ( $busInterfaceTest){
-                              @out_stack      = sys::lib::trim_sort(@out_stack);      
-                              return(@out_stack);
-                              }
-
-
-     my @spirit_design_files       = yp::lib::find_ipxact_design_files($vendor,$library,$component,$version);
-
-     foreach  my   $sd_file (@spirit_design_files)
-     {
-
-     $_ = $sd_file;
-        if(/:::(\S+):::(\S+):::(\S+):::(\S+):::/) 
-          { 
-          $q_vendor            = $1;
-          $q_library           = $2;
-          $q_design            = $3;
-          $q_version           = $4;
-          $sd_file             = $parser->parse_file(yp::lib::find_ipxact_design($q_vendor,$q_library,$q_design,$q_version));
-          }
-
-     foreach  my   $x_name ($sd_file->findnodes('//spirit:hierConnections/spirit:hierConnection/@spirit:interfaceRef'))
-        {
-        my($hierConn_name)                   = $x_name ->to_literal ;
-        my($hierConn_comref_name)            = $x_name ->findnodes('../spirit:interface/@spirit:componentRef')->to_literal ;
-        my($hierConn_busref_name)            = $x_name ->findnodes('../spirit:interface/@spirit:busRef')->to_literal ;
-        if($busref eq  $hierConn_name)   
-          {
-          foreach  my   $x_name ($sd_file->findnodes("//spirit:design/spirit:componentInstances/spirit:componentInstance/spirit:instanceName[text() = '$hierConn_comref_name']"))
-            {
-            #/**********************************************************************/
-            #/*                                                                    */
-            #/* Lookup VLNV for each instantiated component                        */
-            #/*                                                                    */
-            #/**********************************************************************/
-
-            my($vendor_name)         = $x_name  ->findnodes('../spirit:componentRef/@spirit:vendor')->to_literal ;
-            my($library_name)        = $x_name  ->findnodes('../spirit:componentRef/@spirit:library')->to_literal ;
-            my($component_name)      = $x_name  ->findnodes('../spirit:componentRef/@spirit:name')->to_literal ;
-            my($version_name)        = $x_name  ->findnodes('../spirit:componentRef/@spirit:version')->to_literal ;
-            $depth = $depth +1;
-            if($depth eq "3") {$depth = 2;}
-            @out_stack = parse_busInterface ($vendor_name, $library_name,$component_name,$version_name,$hierConn_busref_name,$depth );
-            }
-          }
-        }
-
-     }
-
-        @out_stack      = sys::lib::trim_sort(@out_stack);      
-        return(@out_stack);
-     
-
-   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#/*********************************************************************************************/
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/*********************************************************************************************/
-
-
-
-
-sub parse_design_files
-   {
-   my @params     = @_;
-   my $spirit_component_file      = pop(@params);
-
-
-
-
-  foreach my $new_comp ($spirit_component_file->findnodes("//spirit:component/spirit:model/spirit:views/spirit:view/spirit:vendorExtensions/spirit:componentRef")) 
-    {
-            my($new_vendor)        = $new_comp->findnodes('./@spirit:vendor')->to_literal ;
-            my($new_library)       = $new_comp->findnodes('./@spirit:library')->to_literal ;
-            my($new_name)          = $new_comp->findnodes('./@spirit:name')->to_literal ;
-            my($new_version)       = $new_comp->findnodes('./@spirit:version')->to_literal ;
-            parse_design_files($parser->parse_file(yp::lib::find_ipxact_component($new_vendor,$new_library,$new_name,$new_version )) );
-   }
-
-
-
-
-  foreach my $new_comp ($spirit_component_file->findnodes("//spirit:component/spirit:model/spirit:views/spirit:view/spirit:hierarchyRef")) 
-    {
-            my($new_vendor)        = $new_comp->findnodes('./@spirit:vendor')->to_literal ;
-            my($new_library)       = $new_comp->findnodes('./@spirit:library')->to_literal ;
-            my($new_name)          = $new_comp->findnodes('./@spirit:name')->to_literal ;
-            my($new_version)       = $new_comp->findnodes('./@spirit:version')->to_literal ;
-            if(yp::lib::find_ipxact_design($new_vendor,$new_library,$new_name,$new_version ))
-              {
-              parse_design_file($parser->parse_file(yp::lib::find_ipxact_design($new_vendor,$new_library,$new_name,$new_version )) );
-              }
-  }
-
-}
-
-
-
-
-
-
-
-#/*********************************************************************************************/
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/*********************************************************************************************/
-
-
-
-
-sub process_design_files
-   {
-   my @params     = @_;
-   my $spirit_component_file      = pop(@params);
-
-   #print "\n";
-
-
-
-
-
-
-
-  foreach my $new_comp ($spirit_component_file->findnodes("//spirit:component/spirit:model/spirit:views/spirit:view/spirit:vendorExtensions/spirit:componentRef")) 
-    {
-            my($new_vendor)        = $new_comp->findnodes('./@spirit:vendor')->to_literal ;
-            my($new_library)       = $new_comp->findnodes('./@spirit:library')->to_literal ;
-            my($new_name)          = $new_comp->findnodes('./@spirit:name')->to_literal ;
-            my($new_version)       = $new_comp->findnodes('./@spirit:version')->to_literal ;
-            process_design_files($parser->parse_file(yp::lib::find_ipxact_component($new_vendor,$new_library,$new_name,$new_version )) );
-    }
-
-
-
-
-
-
-  foreach my $new_comp ($spirit_component_file->findnodes("//spirit:component/spirit:model/spirit:views/spirit:view/spirit:hierarchyRef")) 
-    {
-            my($new_vendor)        = $new_comp->findnodes('./@spirit:vendor')->to_literal ;
-            my($new_library)       = $new_comp->findnodes('./@spirit:library')->to_literal ;
-            my($new_name)          = $new_comp->findnodes('./@spirit:name')->to_literal ;
-            my($new_version)       = $new_comp->findnodes('./@spirit:version')->to_literal ;
-            if( yp::lib::find_ipxact_design($new_vendor,$new_library,$new_name,$new_version )  )
-              {
-              if($opt_verbose){print "process_design_file  $new_vendor $new_library $new_name $new_version  \n"; }
-              process_design_file($parser->parse_file(yp::lib::find_ipxact_design($new_vendor,$new_library,$new_name,$new_version )) );
-              }
-    }
-
-}
-
-
-
-
-
-
-
-
-
-
-#/*********************************************************************************************/
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/*********************************************************************************************/
-
-
-
-
-sub parse_design_file
-   {
-   my @params     = @_;
-   my $spirit_design_file      = pop(@params);
-
-
-
-
-
-#print "\n";
-foreach my $new_comp ($spirit_design_file->findnodes("//spirit:design/spirit:vendor")) 
-   {
-   my($new_vendor)          = $new_comp->findnodes('./text()')->to_literal ;
-   my($new_library)         = $new_comp->findnodes('../spirit:library/text()')->to_literal ;
-   my($new_name)            = $new_comp->findnodes('../spirit:name/text()')->to_literal ;
-   my($new_version)         = $new_comp->findnodes('../spirit:version/text()')->to_literal ;
-   #print "WARNING  $new_vendor $new_library $new_name $new_version  DESIGN \n";
-   }
-
-
-
-
-     #/**********************************************************************/
-     #/*                                                                    */
-     #/* Add all internal wires and regs with their sizes                   */
-     #/*                                                                    */
-     #/**********************************************************************/
-          
-
-
-
-
-
-
-
-
-
-     #/**********************************************************************/
-     #/*                                                                    */
-     #/* Read each hierConnection and enter signals into wire_decs          */
-     #/*                                                                    */
-     #/**********************************************************************/
-     foreach  my   $x_name ($spirit_design_file->findnodes('//spirit:hierConnections/spirit:hierConnection/@spirit:interfaceRef'))
-        {
-        my($hierConn_name)                   = $x_name ->to_literal ;
-        my($hierConn_comref_name)            = $x_name ->findnodes('../spirit:interface/@spirit:componentRef')->to_literal ;
-        my($hierConn_busref_name)            = $x_name ->findnodes('../spirit:interface/@spirit:busRef')->to_literal ;
-
-        foreach  my   $x_name ($spirit_design_file->findnodes("//spirit:design/spirit:componentInstances/spirit:componentInstance/spirit:instanceName"))
-           {
-           #/**********************************************************************/
-           #/*                                                                    */
-           #/* Lookup VLNV for each instantiated component                        */
-           #/*                                                                    */
-           #/**********************************************************************/
-
-           my($instance_name)       = $x_name ->findnodes('./text()')->to_literal ;
-           my($vendor_name)         = $x_name  ->findnodes('../spirit:componentRef/@spirit:vendor')->to_literal ;
-           my($library_name)        = $x_name  ->findnodes('../spirit:componentRef/@spirit:library')->to_literal ;
-           my($component_name)      = $x_name  ->findnodes('../spirit:componentRef/@spirit:name')->to_literal ;
-           my($version_name)        = $x_name  ->findnodes('../spirit:componentRef/@spirit:version')->to_literal ;
-
-           if( "$instance_name" eq  "$hierConn_comref_name"     )
-             {
-
-
-           my @busses = yp::lib::get_busses($vendor_name,$library_name,$component_name,$version_name);
-
-           foreach $line (@busses)
-            {
-  
-             my $x_name;
-             my $depth;
-             my $busref;
-             my $conn;
-             my $phy_name;
-             my $log_name;    
-             my $direction;
-             my $type;
-             my $vector;
-             my $left;
-             my $right;
-
-
-          ( ${busref},${conn},${phy_name},${log_name},${direction},${type},${vector},${left},${right}) = split ':::', $line;
-
-           if(${busref} eq ${hierConn_busref_name}    )
-             {
-
-            if("${hierConn_name}_${log_name}" eq  ${phy_name})
-
-              {
-              $depth = 2;
-              $x_name = $conn;
-              }
-            else
-    
-              {
-              $depth = 1;
-              $x_name = $phy_name;
-              }
-
-
-#          print "QQQQQQQQD:::${phy_name}:::${phy_name}:::${direction}:::${type}:::${vector}:::${left}:::${right}:::${hierConn_comref_name}:::3:::${log_name}:::${busref}:::${conn}:::   \n";
-
-#          print "QQQQQQQQF:::${hierConn_name}_${log_name}:::${hierConn_name}_${log_name}:::${direction}:::wire:::${vector}:::${left}:::${right}:::${hierConn_comref_name}:::${depth}:::${x_name}:::${hierConn_busref_name}:::${log_name}:::   \n";
-
-
-                  push  @wire_decs,":::${hierConn_name}_${log_name}:::${hierConn_name}_${log_name}:::${direction}:::wire:::${vector}:::${left}:::${right}:::${hierConn_comref_name}:::${depth}:::${x_name}:::${hierConn_busref_name}:::${log_name}:::";
-
-             }
-            }  
-
-
-
-
-
-             }
-           }
-        }
-
-
-
-
-
-     #/**************************************************************************/
-     #/*                                                                        */
-     #/* Read each  interconnection and enter sub signals into wire_decs        */
-     #/*                                                                        */
-     #/**************************************************************************/
-
-
-
-
-     foreach  my   $x_name ($spirit_design_file->findnodes('//spirit:interconnections/spirit:interconnection/spirit:activeInterface/@spirit:componentRef'))
-        {
-        my($hierConn_comref_name)            = $x_name ->to_literal;
-        my($hierConn_busref_name)            = $x_name ->findnodes('../@spirit:busRef')->to_literal ;
-        my($hierConn_name)                   = $x_name ->findnodes('../../spirit:name/text()')->to_literal ;
-
-        foreach  my   $x_name ($spirit_design_file->findnodes("//spirit:design/spirit:componentInstances/spirit:componentInstance/spirit:instanceName"))
-           {
-           #/**********************************************************************/
-           #/*                                                                    */
-           #/* Lookup VLNV for each instantiated component                        */
-           #/*                                                                    */
-           #/**********************************************************************/
-
-           my($instance_name)       = $x_name ->findnodes('./text()')->to_literal ;
-           my($vendor_name)         = $x_name  ->findnodes('../spirit:componentRef/@spirit:vendor')->to_literal ;
-           my($library_name)        = $x_name  ->findnodes('../spirit:componentRef/@spirit:library')->to_literal ;
-           my($component_name)      = $x_name  ->findnodes('../spirit:componentRef/@spirit:name')->to_literal ;
-           my($version_name)        = $x_name  ->findnodes('../spirit:componentRef/@spirit:version')->to_literal ;
-
-           if( "$instance_name" eq  "$hierConn_comref_name"     )
-             {
-             my @busses = yp::lib::get_busses($vendor_name,$library_name,$component_name,$version_name);
-
-              foreach $line (@busses)
-               {
-#            print "YTYTYT  $line \n";  
-               my $x_name;
-               my $depth;
-               my $busref;
-               my $conn;
-               my $phy_name;
-               my $log_name;    
-               my $direction;
-               my $type;
-               my $vector;
-               my $left;
-               my $right;
-
-
-               ( ${busref},${conn},${phy_name},${log_name},${direction},${type},${vector},${left},${right}) = split ':::', $line;
-
-               if(${busref} eq ${hierConn_busref_name}    )
-                 {
-
-                 if("${hierConn_name}_${log_name}" eq  ${phy_name})
-
-                   {
-                   $depth = 2;
-                   $x_name = $conn;
-                   }
-                 else
-                   {
-                   $depth = 1;
-                   $x_name = $phy_name;
-                   }
-                 push  @wire_decs,":::${hierConn_name}_${log_name}:::${hierConn_name}_${log_name}:::node:::wire:::${vector}:::${left}:::${right}:::${hierConn_comref_name}:::${depth}:::${x_name}:::${hierConn_busref_name}:::${log_name}:::";
-
-                 }
-             }  
-
-             }
-           }
-        }
-
-
-
-     #/*******************************************************************************/
-     #/*                                                                             */
-     #/* Read each  interconnection and enter modified signals into wire_decs        */
-     #/*                                                                             */
-     #/*******************************************************************************/
-
-
-
-
-
-        foreach  my  $k_name ($spirit_design_file->findnodes('//spirit:interconnections/spirit:interconnection/spirit:activeInterface/spirit:portMaps/spirit:portMap/spirit:logicalPort/spirit:name'))
-           {
-           my($lp_name)                = $k_name ->to_literal;
-           my($lp_pname)               = $k_name ->findnodes('../../spirit:physicalPort/spirit:name/text()')->to_literal ;
-           my($lp_left)                = $k_name ->findnodes('../../spirit:physicalPort/spirit:wire/spirit:vector/spirit:left/text()')->to_literal ;
-           my($lp_right)               = $k_name ->findnodes('../../spirit:physicalPort/spirit:wire/spirit:vector/spirit:right/text()')->to_literal ;
-           my($lp_componentref_name)   = $k_name ->findnodes('../../../../@spirit:componentRef')->to_literal ;
-           my($lp_busref_name)         = $k_name ->findnodes('../../../../@spirit:busRef')->to_literal ;
-           my($lp_interconnect_name)   = $k_name ->findnodes('../../../../../spirit:name/text()')->to_literal ;
-
-
-           if ( $lp_pname eq '' ) { $lp_pname ="${lp_interconnect_name}_${lp_name}";}
-           if ( $lp_left  eq '' ) { $lp_left ="none";}
-           if ( $lp_right eq '' ) { $lp_right ="none";}
-
-
-
-          if ( $lp_left  eq 'none' ) 
-          { 
-           push  @wire_decs,":::${lp_interconnect_name}_${lp_name}:::${lp_pname}:::node:::wire:::scaler:::none:::none:::${lp_componentref_name}:::0:::${lp_interconnect_name}_${lp_name}:::${lp_busref_name}:::${lp_pname}:::";
-          }
-          else
-          { 
-           push  @wire_decs,":::${lp_interconnect_name}_${lp_name}:::${lp_pname}:::node:::wire:::vector:::${lp_left}:::${lp_right}:::${lp_componentref_name}:::0:::${lp_interconnect_name}_${lp_name}:::${lp_busref_name}:::${lp_pname}:::";
-          }
-           }
-
-
-
-
-
-
-
-
-     #/**********************************************************************/
-     #/*                                                                    */
-     #/* Read all adHocConnections and load instance connect info into array*/
-     #/*                                                                    */
-     #/**********************************************************************/
-
-
-     foreach  my   $i_xame ($spirit_design_file->findnodes('//spirit:adHocConnections/spirit:adHocConnection/spirit:internalPortReference/@spirit:componentRef'))
-        {
-        my($comp_name)    = $i_xame ->to_literal;
-        my($int_value)    = $i_xame ->findnodes('../../spirit:name/text()')->to_literal ;
-        my($tied_value)   = $i_xame ->findnodes('../../@spirit:tiedValue')->to_literal ;
-        my($int_name)     = $i_xame ->findnodes('../@spirit:portRef')->to_literal ;
-        my($vec_name)     = $i_xame ->findnodes('../../spirit:externalPortReference/@spirit:portRef')->to_literal ;
-        my($vec_left)     = $i_xame ->findnodes('../../spirit:externalPortReference/@spirit:left')->to_literal ;
-        my($vec_right)    = $i_xame ->findnodes('../../spirit:externalPortReference/@spirit:right')->to_literal ;
-
-
-# print "XXXXXX  $comp_name  $int_name  ( $int_value  $tied_value  )   $vec_name $vec_left $vec_right  \n";
-
-
-        unless ($int_value)  
-         {$int_value = "_DUMMY_";
-         }
-
-
-        if($tied_value )
-          { 
-          push @inst_conns , ":::${comp_name}:::adhoc:::${int_name}:::${tied_value}:::scaler:::none:::none:::";         
-          }
-        elsif($vec_left ne "")
-          {
-          push @inst_conns , ":::${comp_name}:::adhoc:::${int_name}:::${int_value}:::vector:::${vec_left}:::${vec_right}:::";
-
-          }
-        else
-          {
-          push @inst_conns , ":::${comp_name}:::adhoc:::${int_name}:::${int_value}:::scaler:::none:::none:::";         
-          }           
-
-
-        }
-
-
-
-
-
-
-
-
-
-
-
-
-           
-
-
-
-
-
-
-     #/**********************************************************************/
-     #/*                                                                    */
-     #/* extract bus instance connections from wire_decs                    */
-     #/*                                                                    */
-     #/**********************************************************************/
-
-     #print "+-+";      
-
-     
-
-     my @inst_names  = (); 
-     my @inst_Inames  = (); 
-     my %inst_ports  = ();
-     my %inst_sigs   = ();
-     my %inst_vector = ();
-     my %inst_left   = ();
-     my %inst_right  = ();
-
-
-     foreach $line (@wire_decs)  
-        { 
-        $_ = $line;
-
-#       print  "WD   $line  \n";
-
-
-        if(/:::(\S+):::(\S+):::(\S+):::(\S+):::(\S+):::(\S+):::(\S+):::(\S+):::(\S+):::(\S+):::(\S+):::(\S+):::/) 
-          { 
-          my $t_index               = $1;
-          my $t_node_name           = $2;
-          my $t_direction           = $3;
-          my $t_type                = $4;
-          my $t_vector              = $5;        
-          my $t_left                = $6;        
-          my $t_right               = $7;
-          my $t_instance            = $8;
-          my $t_depth               = $9;
-          my $t_phy_name            = $10;
-          my $t_busref_name         = $11;
-          my $t_abslog_name         = $12;
-
-         push ( @inst_names, "${t_instance}_${t_busref_name}_${t_index}");
-
-         $inst_Inames{"${t_instance}_${t_busref_name}_${t_index}"}  = "${t_instance}";
-
-         if(  $inst_sigs{"${t_instance}_${t_busref_name}_${t_index}"})
-            {
-            if(  $inst_sigs{"${t_instance}_${t_busref_name}_${t_index}"} eq ${t_index})
-              {
-              $inst_sigs{"${t_instance}_${t_busref_name}_${t_index}"}  = "${t_node_name}";
-              }
-            } 
-         else
-            {
-            $inst_sigs{"${t_instance}_${t_busref_name}_${t_index}"}  = "${t_node_name}";
-            }
-
-         if   ($t_depth >= 2 )      { $inst_ports{"${t_instance}_${t_busref_name}_${t_index}"}  = "${t_busref_name}_${t_abslog_name}" ;}
-         elsif($t_depth == 1 )      { $inst_ports{"${t_instance}_${t_busref_name}_${t_index}"}  = "${t_phy_name}";}
-
-         if(  $inst_vector{"${t_instance}_${t_busref_name}_${t_index}"})
-            {
-            if(  $inst_vector{"${t_instance}_${t_busref_name}_${t_index}"} eq "scaler")
-              {$inst_vector{"${t_instance}_${t_busref_name}_${t_index}"}  = "${t_vector}";}
-            } 
-         else
-            {$inst_vector{"${t_instance}_${t_busref_name}_${t_index}"}  = "${t_vector}";}
-
-
-
-
-         unless(  $inst_left{"${t_instance}_${t_busref_name}_${t_index}"} eq '')
-            {
-
-
-
-            if(  $inst_left{"${t_instance}_${t_busref_name}_${t_index}"} eq "none")
-              {
-              $inst_left{"${t_instance}_${t_busref_name}_${t_index}"}  = "${t_left}";
-              }
-            elsif(  $inst_left{"${t_instance}_${t_busref_name}_${t_index}"} < ${t_left})
-              {
-              $inst_left{"${t_instance}_${t_busref_name}_${t_index}"}  = "${t_left}";
-              }
-            } 
-          else
-            {
-            $inst_left{"${t_instance}_${t_busref_name}_${t_index}"}  = "${t_left}";
-            }
-
-
-
-
-
-          unless(  $inst_right{"${t_instance}_${t_busref_name}_${t_index}"} eq '')
-            {
-            if(  $inst_right{"${t_instance}_${t_busref_name}_${t_index}"} eq "none")
-              {
-              $inst_right{"${t_instance}_${t_busref_name}_${t_index}"}  = "${t_right}";
-              }
-            elsif(  $inst_right{"${t_instance}_${t_busref_name}_${t_index}"} < ${t_right})
-              {
-              $inst_right{"${t_instance}_${t_busref_name}_${t_index}"}  = "${t_right}";
-              }
-            } 
-          else {$inst_right{"${t_instance}_${t_busref_name}_${t_index}"}  = "${t_right}";}
-
-        
-      }
-     }
-     @inst_names = sys::lib::trim_sort(@inst_names); 
-     foreach $i_name (@inst_names)  
-         {
-        unless($inst_Inames{$i_name} eq "none")
-         {
-         if($inst_vector{$i_name} eq "vector"  )
-           {
-          push @inst_conns ,":::$inst_Inames{$i_name}:::adhoc:::$inst_ports{$i_name}:::$inst_sigs{$i_name}:::vector:::$inst_left{$i_name}:::$inst_right{$i_name}:::";
-          }
-        else
-          {
-          push @inst_conns ,":::$inst_Inames{$i_name}:::adhoc:::$inst_ports{$i_name}:::$inst_sigs{$i_name}:::scaler:::none:::none:::";         
-
-           }
-         }
-         }
-     }
-
-
-
-
-
-
-
-
-
-#/*********************************************************************************************/
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/*********************************************************************************************/
-
-
-
-
-sub process_design_file
-   {
-   my @params     = @_;
-   my $spirit_design_file      = pop(@params);
-
-
-
-
-
-#print "\n";
-foreach my $new_comp ($spirit_design_file->findnodes("//spirit:design/spirit:vendor")) 
-   {
-   my($new_vendor)          = $new_comp->findnodes('./text()')->to_literal ;
-   my($new_library)         = $new_comp->findnodes('../spirit:library/text()')->to_literal ;
-   my($new_name)            = $new_comp->findnodes('../spirit:name/text()')->to_literal ;
-   my($new_version)         = $new_comp->findnodes('../spirit:version/text()')->to_literal ;
-#   print "XXXXXX-  $new_vendor $new_library $new_name $new_version  DESIGN \n";
-   }
-
-
-
-
-
-     #/**********************************************************************/
-     #/*                                                                    */
-     #/* Instantiate each component with parameters and port connections    */
-     #/*                                                                    */
-     #/* If the component doesn't have a instance name then this is skipped */
-     #/*                                                                    */
-     #/**********************************************************************/
-      
-     #print "+-+";      
-      
-     push @instantiations  , "////////////////////////////////////////////////////////////////\n"; 
-
-
-     @inst_conns = sys::lib::trim_sort(@inst_conns);
-
-foreach $Iconn( @inst_conns)
-      {
-#       print  "IC   $Iconn  \n";
-
-       }
-
-
-
-     foreach  my   $i_name ($spirit_design_file->findnodes("//spirit:design/spirit:componentInstances/spirit:componentInstance/spirit:instanceName"))
-        {
-        my($instance_name)       = $i_name ->findnodes('./text()')->to_literal ;
-        my($vendor_name)         = $i_name  ->findnodes('../spirit:componentRef/@spirit:vendor')->to_literal ;
-        my($library_name)        = $i_name  ->findnodes('../spirit:componentRef/@spirit:library')->to_literal ;
-        my($component_name)      = $i_name  ->findnodes('../spirit:componentRef/@spirit:name')->to_literal ;
-        my($version_name)        = $i_name  ->findnodes('../spirit:componentRef/@spirit:version')->to_literal ;
-
-        my $module_name = yp::lib::get_module_name($vendor_name,$library_name,$component_name,$version_name) ;
-
-
-
-
-
-
-
-        if($instance_name)
-          {
-          push @instantiations  , "$module_name\n";         
-          $first = 1;
-
-          foreach  my   $i_parameter ($spirit_design_file->findnodes("//spirit:componentInstance[spirit:instanceName/text() = '$instance_name']/spirit:configurableElementValues/spirit:configurableElementValue/\@spirit:referenceId"))
-             {
-             my($foo_name)       = $i_parameter ->to_literal ;
-             my($foo_value)      = $i_parameter ->findnodes('../text()')->to_literal ;
-
-
-
-
-             if($first)
-               {
-               push @instantiations  , "#( .${foo_name} (${foo_value})";
-               $first = 0;         
-               }  
-             else  {push @instantiations  , ",\n   .${foo_name} (${foo_value})";}  
-             }
-
-             if($first == 0)  { push @instantiations  , ")\n";}
-             push @instantiations  , "$instance_name \n   (\n ";
-             $first = 1;
-
-
-
-
-             foreach $line (@inst_conns) 
-                {
-                $_ = $line;
-
-                if(/:::(\S+):::(\S+):::(\S+):::(\S+):::(\S+):::(\S+):::(\S+):::/) 
-                  { 
-                  my $z_instance_name           = $1;
-                  my $z_busRef_name   = $2;
-                  my $z_port_name           = $3;
-                  my $z_signal_name           = $4;        
-                  my $z_vecscal           = $5;
-                  my $z_left           = $6;
-                  my $z_right           = $7;
-
-                  if($opt_debug ){print  "YYYYYY--    $line  \n";}
-
-                  if($z_vecscal eq "vector")
-                    {
-                    if($z_left eq $z_right){$z_signal_name =  "${z_signal_name}[${z_left}]" ;}
-                    else    {$z_signal_name =  "${z_signal_name}[${z_left}:${z_right}]" ;}
-                    }
-
-                  unless ($z_signal_name eq "_DUMMY_")  
-
-
-                   {     
-
-
-
-
-
-                  if($instance_name eq  $z_instance_name ) 
-                    {
-                    if($first)
-                      {
-                      push @instantiations  ,          "  .${z_port_name}         (${z_signal_name})";
-                      $first =0;
-                      }
-                    else   {           push @instantiations  , ",\n   .${z_port_name}         (${z_signal_name})";}
-                    }
-
-                    }
-
-
-
-                  }
-                }
-
-     #print ".";      
-     push @instantiations  , ");\n\n";         
-     }
-     }
-     }
-
-
-
-
-
-
-
-
-
-#/*********************************************************************************************/
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/                                                                                            */
-#/*********************************************************************************************/
-
-
-
-
-sub parse_component_file
-   {
-   my @params     = @_;
-   my $spirit_component_file      = pop(@params);
-
-
-#print "\n";
-foreach my $new_comp ($spirit_component_file->findnodes("//spirit:component/spirit:vendor")) 
-   {
-   my($new_vendor)          = $new_comp->findnodes('./text()')->to_literal ;
-   my($new_library)         = $new_comp->findnodes('../spirit:library/text()')->to_literal ;
-   my($new_name)            = $new_comp->findnodes('../spirit:name/text()')->to_literal ;
-   my($new_version)         = $new_comp->findnodes('../spirit:version/text()')->to_literal ;
-   if($opt_verbose){print "parse_component_file   $new_vendor $new_library $new_name $new_version  COMPONENT \n";}
-   }
-
-
-
-
-     #/**********************************************************************/
-     #/*                                                                    */
-     #/* parse parameters and values                                        */
-     #/*                                                                    */
-     #/**********************************************************************/
-         
-     foreach  my   $i_name ($spirit_component_file->findnodes('//spirit:model/spirit:modelParameters/spirit:modelParameter/spirit:name'))
-        {
-        my($parameter_name)     = $i_name ->to_literal;
-        my($parameter_default)  = $i_name ->findnodes('../spirit:value/text()')->to_literal ;
-
-        unless(defined $parameter_values{$parameter_name}) 
-         {
-         push ( @parameters,  "$parameter_name");
-         $parameter_values{$parameter_name} = ${parameter_default};
-#         $parameter_descriptions{$parameter_name} = "Duhkkk";
-
-
-         foreach my $socgen_cfg ($socgen_file->findnodes("//socgen:componentConfiguration/socgen:doc/socgen:parameters/socgen:parameter/socgen:name[text() = '$parameter_name']")) 
-             {
-             my($param_description)        = $socgen_cfg->findnodes('../socgen:description/text()')->to_literal ;
-             $parameter_descriptions{$parameter_name} = $param_description ;
-             }
-
-
-
-         };
-
-        }
-      
-
-
-
-
-
-
-foreach my $new_comp ($spirit_component_file->findnodes("//spirit:component/spirit:model/spirit:views/spirit:view/spirit:vendorExtensions/spirit:componentRef")) 
-   {
-    my($new_vendor)        = $new_comp->findnodes('./@spirit:vendor')->to_literal ;
-    my($new_library)       = $new_comp->findnodes('./@spirit:library')->to_literal ;
-    my($new_name)          = $new_comp->findnodes('./@spirit:name')->to_literal ;
-    my($new_version)       = $new_comp->findnodes('./@spirit:version')->to_literal ;
-    if(yp::lib::find_ipxact_component($new_vendor,$new_library,$new_name,$new_version))
-     {
-     parse_component_file($parser->parse_file(yp::lib::find_ipxact_component($new_vendor,$new_library,$new_name,$new_version))    );
-     }
-
-   }
-
-
-
-
-
-
-
-
-
- 
-
-
-}
-
 
 1
 

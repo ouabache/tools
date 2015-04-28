@@ -104,6 +104,8 @@ my $home = cwd();
 my $prefix   = yp::lib::get_workspace();
    $prefix   = "/${prefix}";
 
+my $number_of_cpus   = yp::lib::get_number_of_cpus();
+
 my @vendors = yp::lib::find_vendors();
 
 foreach my $vendor (@vendors)
@@ -220,7 +222,7 @@ foreach my $vendor (@vendors)
  }
 
 
-my $manager = new Parallel::ForkManager( 6 );
+my $manager = new Parallel::ForkManager( $number_of_cpus );
 
      foreach $cmd (@cmds)
       {

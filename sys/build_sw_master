@@ -55,6 +55,8 @@ use XML::LibXML;
 use lib './tools';
 use sys::lib;
 use yp::lib;
+use Parallel::ForkManager;
+
 
 $OUTPUT_AUTOFLUSH = 1; # set autoflush of stdout to TRUE.
 
@@ -97,6 +99,8 @@ my $home = cwd();
 
 my $prefix   = yp::lib::get_workspace();
    $prefix   = "/${prefix}";
+
+my $number_of_cpus   = yp::lib::get_number_of_cpus();
 
 my @vendors = yp::lib::find_vendors();
 
@@ -151,13 +155,109 @@ foreach my $component (@components)
       my $codeSet_library     = $i_name ->findnodes('../socgen:library/text()')->to_literal ;
       my $codeSet_component   = $i_name ->findnodes('../socgen:component/text()')->to_literal ;
       my $codeSet_version     = $i_name ->findnodes('../socgen:version/text()')->to_literal ;
+      my $codeSet_prefix      = "${prefix}/${vendor}__${library}/children"; 
 
-      print "$codeSet_name  $codeSet_vendor $codeSet_library $codeSet_component  $codeSet_version  \n ";
 
-     $cmd ="./tools/sys/build_generate -prefix ${prefix}/${vendor}__${library}/children  -vendor ${codeSet_vendor} -library ${codeSet_library}   -component  ${codeSet_component}  -version ${codeSet_version}    \n";
-     if (system($cmd)) {}
-     
-      }
+      print "$codeSet_name    $codeSet_prefix           $codeSet_vendor $codeSet_library $codeSet_component  $codeSet_version  \n ";
+
+
+
+
+
+
+
+
+
+##############################################################################
+## 
+##############################################################################
+
+
+
+my @cmd_list  = ();
+
+
+
+
+my $lib_comp_sep    = yp::lib::find_lib_comp_sep($codeSet_vendor,$codeSet_library,$codeSet_component);
+
+
+
+
+#/*********************************************************************************************/
+#/                                                                                            */
+#/  Create filelists for simulation, synthesis and linting                                    */
+#/                                                                                            */
+#/                                                                                            */
+#/*********************************************************************************************/
+
+my  @filelist =       yp::lib::parse_component_brothers("$codeSet_vendor","$codeSet_library","$codeSet_component","$codeSet_version");
+
+foreach $line (@filelist) 
+   {
+   $_ = $line;
+   if(/::(\S+)::(\S+)::(\S+)::(\S+)::/) 
+     { 
+     $new_library        = $2;
+     $new_component      = $3;
+     $new_vendor         = $1;
+     $new_version        = $4;                
+
+
+     my $spirit_component_file    = $parser->parse_file(yp::lib::find_ipxact_component($new_vendor,$new_library,$new_component,$new_version));
+
+     foreach  my   $i_name ($spirit_component_file->findnodes("//spirit:componentGenerator/spirit:name"))
+       {
+       my($gen_name)            = $i_name ->findnodes('../spirit:name/text()')->to_literal ;
+       my($gen_generatorExe)    = $i_name ->findnodes('../spirit:generatorExe/text()')->to_literal ;
+       my($gen_phase)           = $i_name ->findnodes('../spirit:phase/text()')->to_literal ;
+
+       my $cmd;   
+       $cmd = "   -prefix $codeSet_prefix -vendor $codeSet_vendor     -library $codeSet_library  -component $codeSet_component -version $codeSet_version  ";
+    
+       foreach  my   $i_name ($spirit_component_file->findnodes("//spirit:componentGenerator[spirit:name/text() = '$gen_name']/spirit:parameters/spirit:parameter"))
+          {
+          my($gen_param)             = $i_name ->findnodes('./spirit:value/text()')->to_literal ;
+          my($gen_param_name)        = $i_name ->findnodes('./spirit:name/text()')->to_literal ;
+    
+          if   ($gen_param_name eq "in_pipe")     {$cmd =  "$cmd <${home}${codeSet_prefix}/${codeSet_vendor}__${codeSet_library}${lib_comp_sep}${codeSet_component}/${gen_param}";}
+          elsif($gen_param_name eq "out_pipe")    {$cmd =  "$cmd >${home}${codeSet_prefix}/${codeSet_vendor}__${codeSet_library}${lib_comp_sep}${codeSet_component}/${gen_param}";}
+          elsif($gen_param_name)                  {$cmd =  "$cmd -${gen_param_name} $gen_param ";}
+          else                                    {$cmd =  "$cmd $gen_param";}
+          }
+
+       foreach  my   $i_name ($spirit_component_file->findnodes("//spirit:componentGenerator[spirit:name/text() = '$gen_name']/spirit:vendorExtensions/socgen:envIdentifier"))
+          {
+          my($gen_envidentifier)  = $i_name ->findnodes('./text()')->to_literal ;
+
+          my $New_cmd =  "  ${gen_generatorExe}  -envidentifier $gen_envidentifier      ${cmd}\n";
+          if(${gen_generatorExe} ) 
+              {
+              push  @cmd_list, "${gen_phase}::$New_cmd";
+              }
+          }
+       }
+     }
+   }
+
+
+
+               my $manager = new Parallel::ForkManager( $number_of_cpus );
+               @cmd_list      = sys::lib::trim_sort(@cmd_list);
+               my $cmd;
+               my $phase;
+
+               foreach my $Cmd_line (@cmd_list)
+                   {
+                   ( $phase,$cmd) = split( /\::/ , $Cmd_line);
+                   $manager->start and next;
+                   if (system($cmd)) {}
+                   $manager->finish;
+                   }
+
+               $manager->wait_all_children;
+               print "Software COMPLETE \n";
+               }
 
 }
 
@@ -166,5 +266,26 @@ foreach my $component (@components)
 
 
    return(0);
-   }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

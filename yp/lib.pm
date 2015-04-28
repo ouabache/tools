@@ -111,15 +111,16 @@ foreach my $repo ($workspace_xml->findnodes('//socgen:workspace'))
 
                   }
 
-
+unless(defined $number_of_cpus)  {    $number_of_cpus = 1;         }
+unless(defined $workspace     )  {    $workspace      = "work";    }
+unless(defined $yellow_pages  )  {    $yellow_pages   = "yp";      }
+unless(defined $io_ports      )  {    $io_ports       = "io_ports";}
+unless(defined $doc_dir       )  {    $doc_dir        = "doc_dir"; }
 
 #print "number_of_cpus  $number_of_cpus  \n";
 #print "workspace       $workspace  \n";
 #print "yellow_pages    $yellow_pages  \n";
 #print "io_ports        $io_ports  \n";
-
-
-
 
 my $path  = "${home}/${yellow_pages}";
 
@@ -128,10 +129,7 @@ unless( -e $path )
 print "$path does not exist \n";
 my $cmd = "./tools/yp/create_yp $path \n";
 if(system($cmd)){};
-
 }
-
-
 
 my $repo_db                     = new BerkeleyDB::Hash( -Filename => "${yellow_pages}/repo.dbm", -Flags => DB_CREATE ) or die "Cannot open file: $!";
 my $component_db                = new BerkeleyDB::Hash( -Filename => "${yellow_pages}/component.dbm", -Flags => DB_CREATE ) or die "Cannot open file: $!";
@@ -140,13 +138,6 @@ my $abstractionDefinition_db    = new BerkeleyDB::Hash( -Filename => "${yellow_p
 my $busDefinition_db            = new BerkeleyDB::Hash( -Filename => "${yellow_pages}/busDefinition.dbm", -Flags => DB_CREATE ) or die "Cannot open file: $!";
 my $libraryConfiguration_db     = new BerkeleyDB::Hash( -Filename => "${yellow_pages}/libraryConfiguration.dbm", -Flags => DB_CREATE ) or die "Cannot open file: $!";
 my $componentConfiguration_db   = new BerkeleyDB::Hash( -Filename => "${yellow_pages}/componentConfiguration.dbm", -Flags => DB_CREATE ) or die "Cannot open file: $!";
-
-
-
-
-
-
-
 
 
 #/***********************************************************************************************/
@@ -213,6 +204,22 @@ sub get_doc_dir
 
 
 
+#/***********************************************************************************************/
+#/  get_number_of_cpus                                                                          */
+#/                                                                                              */
+#/  returns number of cpus available for tool usage                                             */
+#/                                                                                              */
+#/  my $number_of_cpus = yp::lib::get_number_of_cpus ();                                        */
+#/                                                                                              */
+#/***********************************************************************************************/
+
+sub get_number_of_cpus
+   {
+   return("${number_of_cpus}");
+   }
+
+
+
 
 #/***************************************************************************************************/
 #/  get_io_ports_db_filename                                                                        */
@@ -231,7 +238,7 @@ sub get_io_ports_db_filename
    my $library    = pop(@params);
    my $vendor     = pop(@params);
    my $main_module_name = yp::lib::get_module_name($vendor,$library,$component,$version) ;
-   my $io_ports_db_filename = "${home}/${io_ports}/${vendor}__${library}/${component}/${main_module_name}_PORTS.dbm";
+   my $io_ports_db_filename = "${home}/${io_ports}/${vendor}__${library}/${component}/${main_module_name}/PORTS.dbm";
 
    if(-e ${io_ports_db_filename } ) 
      { 
@@ -246,14 +253,14 @@ sub get_io_ports_db_filename
 
 
 
-#/***************************************************************************************************/
-#/  get_io_busses_db_filename                                                                        */
-#/                                                                                                  */
-#/  returns full path name to io_busses database filename                                            */
-#/                                                                                                  */
-#/  my $io_ports_filename = yp::lib::get_io_busses_db_filename($vendor,$library,$component,$version);*/
-#/                                                                                                  */
-#/***************************************************************************************************/
+#/******************************************************************************************************/
+#/  get_io_busses_db_filename                                                                          */
+#/                                                                                                     */
+#/  returns full path name to io_busses database filename                                              */
+#/                                                                                                     */
+#/  my $io_busses_filename = yp::lib::get_io_busses_db_filename($vendor,$library,$component,$version); */
+#/                                                                                                     */
+#/******************************************************************************************************/
 
 sub get_io_busses_db_filename
    {
@@ -263,7 +270,7 @@ sub get_io_busses_db_filename
    my $library    = pop(@params);
    my $vendor     = pop(@params);
    my $main_module_name = yp::lib::get_module_name($vendor,$library,$component,$version) ;
-   my $io_busses_db_filename = "${home}/${io_ports}/${vendor}__${library}/${component}/${main_module_name}_BUSSES.dbm";
+   my $io_busses_db_filename = "${home}/${io_ports}/${vendor}__${library}/${component}/${main_module_name}/BUSSES.dbm";
 
    if(-e ${io_busses_db_filename } ) 
      { 
@@ -272,6 +279,42 @@ sub get_io_busses_db_filename
    my $cmd = "./tools/verilog/gen_ports    -vendor $vendor -library  $library  -component $component  -version $version   ";
    if (system($cmd)) {}
    return("${io_busses_db_filename}");
+   }
+
+
+
+
+
+#/***********************************************************************************************************/
+#/  get_elab_db_filename                                                                                    */
+#/                                                                                                          */
+#/  returns full path name to elab database filename                                                        */
+#/                                                                                                          */
+#/  my $elab_filename = yp::lib::get_elab_db_filename($vendor,$library,$component,$version,$configuration); */
+#/                                                                                                          */
+#/***********************************************************************************************************/
+
+sub get_elab_db_filename
+   {
+   my @params     = @_;
+   my $configuration    = pop(@params);
+   my $version    = pop(@params);
+   my $component  = pop(@params);
+   my $library    = pop(@params);
+   my $vendor     = pop(@params);
+   
+   my $elab_db_filename;
+
+   if($configuration eq "default")
+   {
+    $elab_db_filename = "${home}/dbs/${vendor}_${library}_${component}_${version}.db";
+   }
+   else
+   {
+    $elab_db_filename = "${home}/dbs/${vendor}_${library}_${component}_${version}_${configuration}.db";
+   }
+
+   return("${elab_db_filename}");
    }
 
 
@@ -296,10 +339,8 @@ sub get_signals
    my $component  = pop(@params);
    my $library    = pop(@params);
    my $vendor     = pop(@params);
-   my $main_module_name = yp::lib::get_module_name($vendor,$library,$component,$version) ;
-   my $io_ports_db_filename = "${home}/${io_ports}/${vendor}__${library}/${component}/${main_module_name}_PORTS.dbm";
 
-
+   my $io_ports_db_filename = yp::lib::get_io_ports_db_filename($vendor,$library,$component,$version);
    unless (-e ${io_ports_db_filename } ) 
       { 
 
@@ -331,6 +372,366 @@ sub get_signals
 
 
 
+
+
+#/***************************************************************************************************/
+#/  get_Parameters                                                                                  */
+#/                                                                                                  */
+#/  returns array of all instance parameters in a component                                         */
+#/                                                                                                  */
+#/  my @parameters  = yp::lib::get_Parameters($vendor,$library,$component,$version,$instance,$configuration);      */
+#/                                                                                                  */
+#/***************************************************************************************************/
+
+sub get_Parameters
+   {
+   my @params     = @_;
+   my $configuration = pop(@params);
+   my $instance   = pop(@params);
+   my $version    = pop(@params);
+   my $component  = pop(@params);
+   my $library    = pop(@params);
+   my $vendor     = pop(@params);
+   my $elab_db_filename = yp::lib::get_elab_db_filename($vendor,$library,$component,$version,$configuration);
+   my  $ports_db   = new BerkeleyDB::Hash( -Filename => $elab_db_filename, -Flags => DB_CREATE ) or die "Cannot open ${elab_db_filename}: $!";
+   my  @parameters  = (); 
+   my  $key;
+   my  $value;
+   my  $port_cursor = $ports_db->db_cursor() ;
+       while ($port_cursor->c_get($key, $value, DB_NEXT) == 0) 
+          {
+	  my $parameter_root;
+	  my $parameter;
+          ( $parameter_root,$parameter) = split( /\__/ , $key);
+          if($parameter_root eq "Parameter_${instance}")
+            {
+            push (@parameters, "${parameter}::${value}");       
+            }
+          }
+
+   my  $status = $port_cursor->c_close() ;
+
+       @parameters      = sys::lib::trim_sort(@parameters);
+   return(@parameters);
+   }
+
+
+
+
+#/***************************************************************************************************/
+#/  get_parameters                                                                                  */
+#/                                                                                                  */
+#/  returns array of all parameters in a component                                                  */
+#/                                                                                                  */
+#/  my @parameters  = yp::lib::get_parameters($vendor,$library,$component,$version,$configuration);                */
+#/                                                                                                  */
+#/***************************************************************************************************/
+
+sub get_parameters
+   {
+   my @params     = @_;
+   my $configuration    = pop(@params);
+   my $version    = pop(@params);
+   my $component  = pop(@params);
+   my $library    = pop(@params);
+   my $vendor     = pop(@params);
+   my $elab_db_filename = yp::lib::get_elab_db_filename($vendor,$library,$component,$version,$configuration);
+   my  $ports_db   = new BerkeleyDB::Hash( -Filename => $elab_db_filename, -Flags => DB_CREATE ) or die "Cannot open ${elab_db_filename}: $!";
+   my  @parameters  = (); 
+   my  $key;
+   my  $value;
+   my  $port_cursor = $ports_db->db_cursor() ;
+       while ($port_cursor->c_get($key, $value, DB_NEXT) == 0) 
+          {
+	  my $parameter_root;
+	  my $parameter;
+          ( $parameter_root,$parameter) = split( /\__/ , $key);
+          if($parameter_root eq "parameter_root")
+            {
+            push (@parameters, "${parameter}::${value}");       
+            }
+          }
+
+   my  $status = $port_cursor->c_close() ;
+
+       @parameters      = sys::lib::trim_sort(@parameters);
+   return(@parameters);
+   }
+
+
+
+
+
+
+#/***************************************************************************************************/
+#/  get_instance_names                                                                              */
+#/                                                                                                  */
+#/  returns array of all instance_names in a component                                              */
+#/                                                                                                  */
+#/  my @instance_names  = yp::lib::get_instance_names($vendor,$library,$component,$version,$configuration);        */
+#/                                                                                                  */
+#/***************************************************************************************************/
+
+sub get_instance_names
+   {
+   my @params     = @_;
+   my $configuration    = pop(@params);
+   my $version    = pop(@params);
+   my $component  = pop(@params);
+   my $library    = pop(@params);
+   my $vendor     = pop(@params);
+   my $elab_db_filename = yp::lib::get_elab_db_filename($vendor,$library,$component,$version,$configuration);
+   my  $ports_db   = new BerkeleyDB::Hash( -Filename => $elab_db_filename, -Flags => DB_CREATE ) or die "Cannot open ${elab_db_filename}: $!";
+   my  @instance_names  = ();
+   my  $field1;
+   my  $field2;
+   my  $key;
+   my  $value;
+#   print "QQQQQQQQQQ  get_instance_names $vendor,$library,$component,$version \n ";
+
+   my  $port_cursor = $ports_db->db_cursor() ;
+       while ($port_cursor->c_get($key, $value, DB_NEXT) == 0) 
+          {
+          ( $field1,$field2) = split( /\./ , $key);
+
+
+          if(($field1 eq "component___root")&& ($key eq "${field1}.${field2}"   )  )
+            {
+
+            push (@instance_names, "${field2}");       
+            }
+          }
+
+   my  $status = $port_cursor->c_close() ;
+
+       @instance_names      = sys::lib::trim_sort(@instance_names);
+   return(@instance_names);
+   }
+
+
+
+#/***********************************************************************************************************/
+#/  get_instance_module_name                                                                                */
+#/                                                                                                          */
+#/  returns the module anme of an instance                                                                  */
+#/                                                                                                          */
+#/  my $module_name  = yp::lib::get_instance_module_name($vendor,$library,$component,$version,$instance,$configuration );  */
+#/                                                                                                          */
+#/***********************************************************************************************************/
+
+sub get_instance_module_name
+   {
+   my @params     = @_;
+   my $configuration   = pop(@params);
+   my $instance   = pop(@params);
+   my $version    = pop(@params);
+   my $component  = pop(@params);
+   my $library    = pop(@params);
+   my $vendor     = pop(@params);
+   my $elab_db_filename = yp::lib::get_elab_db_filename($vendor,$library,$component,$version,$configuration);
+   my $elab_db   = new BerkeleyDB::Hash( -Filename => $elab_db_filename, -Flags => DB_CREATE ) or die "Cannot open ${elab_db_filename}: $!";
+   my $module_name;
+   my $module_vlnv;
+   my $module_vendor;
+   my $module_library;
+   my $module_component;
+   my $module_version;
+   $elab_db->db_get("component___root.${instance}", $module_vlnv );
+   ( $module_vendor,$module_library,$module_component,$module_version) = split( /\:/ , $module_vlnv);
+     $module_name = yp::lib::get_module_name($module_vendor,$module_library,$module_component,$module_version) ;
+   return($module_name);
+   }
+
+
+
+
+
+
+#/*********************************************************************************************************/
+#/  get_instance_conns                                                                                    */
+#/                                                                                                        */
+#/  returns array of all connections to an instance                                                       */
+#/                                                                                                        */
+#/  my @inst_conns  = yp::lib::get_instance_conns($vendor,$library,$component,$version,$instance);        */
+#/                                                                                                        */
+#/*********************************************************************************************************/
+
+sub get_instance_conns
+   {
+   my @params     = @_;
+   my $instance   = pop(@params);
+   my $version    = pop(@params);
+   my $component  = pop(@params);
+   my $library    = pop(@params);
+   my $vendor     = pop(@params);
+
+   my $io_busses_db_filename = yp::lib::get_io_busses_db_filename($vendor,$library,$component,$version);
+
+
+
+
+   unless (-e ${io_busses_db_filename } ) 
+      { 
+
+      my $cmd = "./tools/verilog/gen_ports    -vendor $vendor -library  $library  -component $component  -version $version   ";
+      if (system($cmd)) {}
+         $cmd = "./tools/verilog/gen_signals  -vendor $vendor -library  $library  -component $component  -version $version   ";
+      if (system($cmd)) {}
+      }
+
+
+
+   my  $ports_db   = new BerkeleyDB::Hash( -Filename => $io_busses_db_filename, -Flags => DB_CREATE ) or die "Cannot open ${io_busses_db_filename}: $!";
+   my  @inst_conns  = (); 
+   my  $key;
+   my  $value;
+   my  $port_cursor = $ports_db->db_cursor() ;
+       while ($port_cursor->c_get($key, $value, DB_NEXT) == 0) 
+          {
+	  my $Instance;
+          my $instance_name;
+          my $instance_busref;
+          ( $Instance,$instance_name,$instance_busref) = split( /\./ , $key);
+          if(($Instance eq "Instance")&& ($instance eq $instance_name))
+      	    {
+            my $new_key;
+	    my $new_value;
+            my  $bus_cursor = $ports_db->db_cursor() ;
+          while ($bus_cursor->c_get($new_key, $new_value, DB_NEXT) == 0) 
+          {
+	  my $IXstance;
+          my $IX_inst;
+          my $IX_busref;
+          my $IX_port;
+          ( $IXstance,$IX_inst,$IX_busref,$IX_port) = split( /\./ , $new_key);
+          if(($IXstance eq "IXstance") && ($IX_inst eq $instance_name) &&($IX_busref eq $instance_busref) )
+      	    {
+	    my $logname;
+            my $direction;
+            my $wire;
+            my $vector;
+            my $left;
+            my $right;
+            my $port;
+            ($logname,$direction,$wire,$vector,$left,$right,$port ) = split( /\:/ , $new_value);
+            my $type;
+            my $signal;
+
+            $ports_db->db_get("BusRef.${value}.${IX_port}", $new_value );
+
+
+            ($logname,$type,$wire,$vector,$left,$right,$signal ) = split( /\:/ , $new_value);
+
+
+               if($vector eq "vector")
+                {               
+                push (@inst_conns, ".${port}      ( ${signal}[${left}:${right}]  )");       
+                }
+               else
+                {               
+                push (@inst_conns, ".${port}      ( ${signal}  )");       
+                }
+            }
+	  }
+          my  $status = $bus_cursor->c_close() ;
+
+
+
+
+
+
+            }
+          }
+   my  $status = $port_cursor->c_close() ;
+
+       @inst_conns      = sys::lib::trim_sort(@inst_conns);
+   return(@inst_conns);
+   }
+
+
+
+
+#/*********************************************************************************************************/
+#/  get_instance_adhoc_conns                                                                                    */
+#/                                                                                                        */
+#/  returns array of all connections to an instance                                                       */
+#/                                                                                                        */
+#/  my @inst_conns  = yp::lib::get_instance_adhoc_conns($vendor,$library,$component,$version,$instance);  */
+#/                                                                                                        */
+#/*********************************************************************************************************/
+
+sub get_instance_adhoc_conns
+   {
+   my @params     = @_;
+   my $instance   = pop(@params);
+   my $version    = pop(@params);
+   my $component  = pop(@params);
+   my $library    = pop(@params);
+   my $vendor     = pop(@params);
+
+   my $io_busses_db_filename = yp::lib::get_io_busses_db_filename($vendor,$library,$component,$version);
+
+   unless (-e ${io_busses_db_filename } ) 
+      { 
+
+      my $cmd = "./tools/verilog/gen_ports    -vendor $vendor -library  $library  -component $component  -version $version   ";
+      if (system($cmd)) {}
+         $cmd = "./tools/verilog/gen_signals  -vendor $vendor -library  $library  -component $component  -version $version   ";
+      if (system($cmd)) {}
+      }
+
+
+
+   my  $ports_db   = new BerkeleyDB::Hash( -Filename => $io_busses_db_filename, -Flags => DB_CREATE ) or die "Cannot open ${io_busses_db_filename}: $!";
+   my  @inst_conns  = (); 
+   my  $key;
+   my  $value;
+   my  $port_cursor = $ports_db->db_cursor() ;
+       while ($port_cursor->c_get($key, $value, DB_NEXT) == 0) 
+          {
+
+	  my $adhoc_inst;
+          my $port;
+          ( $adhoc_inst,$port) = split( /\__/ , $key);
+          if($adhoc_inst eq "AdHoc_${instance}")
+             {
+		 my $sig1;
+                 my $sig2;
+		 my $wire;
+                 my $vector;
+		 my $left;
+                 my $right;
+	    
+
+
+          ( $sig1,$sig2,$wire,$vector,$left,$right) = split( /\:/ , $value);
+
+		 if($sig1 eq "***") {$sig1 = "   ";}
+              if($vector eq "vector")
+              {
+               push (@inst_conns, " .${port}      ( ${sig1}[${left}:${right}] )");       
+              }
+              else
+              {
+               push (@inst_conns, " .${port}      ( ${sig1}  )");       
+              }
+
+             }
+
+          }
+   my  $status = $port_cursor->c_close() ;
+
+       @inst_conns      = sys::lib::trim_sort(@inst_conns);
+   return(@inst_conns);
+   }
+
+
+
+
+
+
+
+
 #/***************************************************************************************************/
 #/  get_busses                                                                                     */
 #/                                                                                                  */
@@ -347,9 +748,9 @@ sub get_busses
    my $component  = pop(@params);
    my $library    = pop(@params);
    my $vendor     = pop(@params);
-   my $main_module_name = yp::lib::get_module_name($vendor,$library,$component,$version) ;
-   my $io_busses_db_filename = "${home}/${io_ports}/${vendor}__${library}/${component}/${main_module_name}_BUSSES.dbm";
 
+
+   my $io_busses_db_filename = yp::lib::get_io_busses_db_filename($vendor,$library,$component,$version);
 
    unless (-e ${io_busses_db_filename } ) 
       { 
@@ -388,28 +789,6 @@ sub get_busses
    @busses      = sys::lib::trim_sort(@busses);
    return(@busses);
    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 #/***************************************************************************************************/
@@ -470,8 +849,6 @@ sub find_ipxact_component
    my $comp_xml_sep;
       $component_db->db_get("${vendor}__${library}_${component}_${version}", $comp_data );
       ( $component_xml, $comp_xml_sep,$component_version ) = split ':', $comp_data;
-#   print "XXXXXX ${vendor}__${library}_${component}_${version}  $comp_data  \n";
-
 
       return("$component_xml");
    }
@@ -1195,7 +1572,7 @@ sub get_module_name
    my $socgen_component_filename  = yp::lib::find_componentConfiguration($vendor,$library,$component);  
    unless($socgen_component_filename)
       {
-	  return("");
+	  return("${component}_${version}");
       }
    my $socgen_component_file  = $parser->parse_file($socgen_component_filename);  
 
@@ -1446,9 +1823,6 @@ sub find_ipxact_design_files
      return(@design_files);
    }
 
-
-
-
 sub trim_sort {
    my @output_files  = @_;
    my %trim = ();
@@ -1457,9 +1831,6 @@ sub trim_sort {
    @output_files =  sort(sort @k);  
    return(@output_files);
    }
-
-
-
 
 
 1;

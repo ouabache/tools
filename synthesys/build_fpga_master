@@ -55,6 +55,7 @@ use XML::LibXML;
 use lib './tools';
 use sys::lib;
 use yp::lib;
+use Parallel::ForkManager;
 
 $OUTPUT_AUTOFLUSH = 1; # set autoflush of stdout to TRUE.
 
@@ -128,8 +129,63 @@ sub run_vendor_library
    my @params     = @_;
    my $library    = pop(@params);
    my $vendor     = pop(@params);
-   my $cmd ="./tools/synthesys/build_fpgas  ${vendor}__${library} \n";
-   print "$cmd";
-   if(system($cmd)){}
-   return(0);
+   my $prefix          = yp::lib::get_workspace();
+   my $number_of_cpus  = yp::lib::get_number_of_cpus();
+
+   my @components   = yp::lib::find_components($vendor,$library);
+
+   foreach my $component (@components) 
+      {
+      my $socgen_filename     = yp::lib::find_componentConfiguration($vendor,$library,$component);
+
+      if($socgen_filename)
+        {
+        my $socgen_file     = $parser->parse_file($socgen_filename);
+        my $syn_library_path ;
+        my $lib_comp_sep    = yp::lib::find_lib_comp_sep($vendor,$library,$component);
+        my $syn_comp_path   = $socgen_file->findnodes("//socgen:componentConfiguration/socgen:syn/socgen:comp_path/text()")->to_literal;
+
+        if ($syn_comp_path)
+           {
+           $syn_library_path ="${lib_comp_sep}${syn_comp_path}";
+           }
+        else
+           {
+           $syn_library_path = $socgen_file->findnodes("//socgen:componentConfiguration/socgen:syn/socgen:library_path/text()")->to_literal;
+           }
+
+      #   print "XXXX-   $vendor $library $component  $syn_library_path   \n";
+
+        #/*********************************************************************************************/
+        #/   files for synthesys                                                                      */
+        #/                                                                                            */
+        #/*********************************************************************************************/
+        my $cmd;
+        my @cmds =();
+        my $manager = new Parallel::ForkManager( $number_of_cpus );
+
+
+        foreach  my   $i_name ($socgen_file->findnodes("//socgen:componentConfiguration/socgen:syn/socgen:ise/socgen:chip/socgen:variant"))
+           {
+           my($chip_variant)     = $i_name ->findnodes('./text()')->to_literal ;
+           my($chip_part)        = $i_name ->findnodes('../socgen:target/socgen:part/text()')->to_literal ;
+           print "  FPGAs     $chip_variant       $chip_part    \n"; 
+           $cmd ="./tools/synthesys/run_ise   $vendor $library $syn_library_path  $chip_variant    $chip_part       \n";
+           push @cmds,$cmd;
+           }
+
+        foreach $cmd (@cmds)
+           {
+           $manager->start and next;
+           system($cmd);
+           $manager->finish;
+           }
+
+        #   $manager->wait_all_children;
+        print "build_fpgas COMPLETE \n";
+
+        }
+      }
    }
+
+
