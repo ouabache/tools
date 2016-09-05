@@ -1,0 +1,28 @@
+SHELL=/bin/sh
+MAKE=make
+CUR_DIR=$(shell pwd)
+home=$(CUR_DIR)/..
+
+all:   install
+
+
+.PHONY install:
+install:
+	(\
+	sudo apt-get  install -y emacs;\
+        sudo apt-get  install -y cvs;\
+        sudo apt-get  install -y subversion;\
+        sudo apt-get  install -y git;\
+        sudo apt-get  install -y gitk;\
+        sudo apt-get  install -y git-gui;\
+        sudo apt-get  install -y xutils-dev;\
+        sudo apt-get  install -y tkcvs;\
+        sudo apt-get  install -y qt5-default;\
+        sudo apt-get  install -y libqt5xmlpatterns5-dev;\
+        sudo apt-get  install -y qttools5-private-dev;\
+        sudo apt-get  install -y qttools5-dev-tools;\
+        sudo apt-get  install -y python-pip;\
+	)
+
+
+
