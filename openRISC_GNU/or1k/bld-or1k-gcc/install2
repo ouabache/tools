@@ -1,0 +1,3 @@
+../or1k-gcc/configure --target=or1k-elf --prefix=/opt/or1k-toolchain --enable-languages=c,c++ --disable-shared --disable-libssp --with-newlib
+make
+make install

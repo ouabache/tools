@@ -22,7 +22,25 @@ install:
         sudo apt-get  install -y qttools5-private-dev;\
         sudo apt-get  install -y qttools5-dev-tools;\
         sudo apt-get  install -y python-pip;\
-	)
+        sudo apt-get  install -y build-essential;\
+        sudo apt-get  install -y make;\
+        sudo apt-get  install -y gcc;\
+        sudo apt-get  install -y g++;\
+        sudo apt-get  install -y flex;\
+        sudo apt-get  install -y bison;\
+        sudo apt-get  install -y patch;\
+        sudo apt-get  install -y texinfo;\
+        sudo apt-get  install -y libncurses5-dev;\
+        sudo apt-get  install -y libmpfr-dev;\
+        sudo apt-get  install -y libgmp3-dev;\
+        sudo apt-get  install -y libmpc-dev;\
+        sudo apt-get  install -y libzip-dev;\
+        sudo apt-get  install -y python-dev;\
+        sudo apt-get  install -y libexpat1-dev;\
+        sudo apt-get  install -y libtool;\
+        sudo apt-get  install -y autoconf;\
+        sudo apt-get  install -y libelf-dev;\
+)
 
 
 
