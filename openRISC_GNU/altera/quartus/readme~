@@ -1,0 +1,222 @@
+
+OpenRISC tool chain installation guide
+juliusbaxter edited this page on Oct 29, 2014 · 4 revisions
+Pages 4
+
+    Home
+    OpenRISC SoC on FPGA
+    OpenRISC SoC usage basics
+    OpenRISC tool chain installation guide
+
+Clone this wiki locally
+Introduction
+
+This is a guide for installing the OpenRISC tool chain and various other tools for development of the mor1kx processor in its mor1kx-dev-env environment.
+
+Specifically, the Altera tools are installed here to make use of the de0 nano port.
+
+First of all, you must be on a Linux machine. I am using a relatively recent edition of Ubuntu, so all of the example commands will be specific to that. It is assumed you are relatively proficient at using the shell.
+Required components
+
+The following are the required components:
+
+    The OpenRISC GNU tool chain (bare-metal, newlib-based, or1k-elf-)
+    The mor1kx RTL, and the mor1kx-dev-env SoC development environment
+    Icarus Verilog and GTKWave
+    The Altera Quartus tools (for synthesis, board programming)
+    OpenOCD debug proxy
+
+Installing the required components
+
+It is recommended this process is performed completed before attempting any part of the process, as, for instance, the SoC development environment depends on all tools being available.
+
+For these examples, we will use the directory $HOME/or1k
+General system tools
+
+It is recommended the following development tools and libraries are installed. They will be necessary for various parts of the flow.
+
+Under Ubuntu, apt-get the following:
+
+    sudo apt-get -y install build-essential make gcc g++ flex bison patch texinfo libncurses5-dev libmpfr-dev libgmp3-dev libmpc-dev libzip-dev python-dev libexpat1-dev libftdi-dev libtool autoconf
+
+OpenRISC GNU tool chain precompiled for 32-bit Linux
+
+or1k-elf- toolchain built in April 2013 from github sources (150MB)
+
+Extract this under /opt to create the directory or1k-toolchain.
+
+Then run the following to add the executables to your $PATH:
+
+    echo "# OpenRISC tool chain path" >> ~/.bashrc
+
+    echo "export PATH=\$PATH:/opt/or1k-toolchain/bin" >> ~/.bashrc
+
+OpenRISC GNU tool chain from source
+
+These instructions are as per the project's GNU tool chain page on OpenCores.
+
+What is required first is a copy of the tool chain source. There are two repositories - one for GCC (called or1k-gcc) and one for the rest of the GNU tools and libraries (binutils, GDB, newlib, called or1k-src). We must get the entirety of both.
+
+You will need to download the repositories as a zip file OR use git.
+
+Download zip files (save into $HOME/or1k):
+
+or1k-src
+
+or1k-gcc
+
+... and unzip into the $HOME/or1k directory, making 2 directories or1k-src-or1k/ and or1k-gcc-or1k/
+
+Rename those directories to be without the trailing -or1k so
+
+    mv or1k-src-or1k or1k-src
+
+    mv or1k-gcc-or1k or1k-gcc
+
+or
+
+git clone:
+
+    mkdir $HOME/or1k && cd $HOME/or1k
+
+    git clone git://github.com/openrisc/or1k-src.git
+
+    git clone git://github.com/openrisc/or1k-gcc.git
+
+Once the source trees are in place, we will build.
+
+We will install the tool chain into /opt/or1k-toolchain. Make sure that directory is writeable eg.:
+
+    sudo mkdir /opt/or1k-toolchain
+
+    sudo chown $USER /opt/or1k-toolchain
+
+The following commands will build the tool chain (starting in the $HOME/or1k directory):
+
+    # Build the first set of tools, binutils etc.
+
+    # NOTE: on 32-bit machines --disable-werror is needed due to an enum acting as bit mask is considered signed
+
+    mkdir bld-or1k-src bld-or1k-gcc
+
+    cd bld-or1k-src
+
+    ../or1k-src/configure --target=or1k-elf --prefix=/opt/or1k-toolchain --enable-shared --disable-itcl --disable-tk --disable-tcl --disable-winsup --disable-libgui --disable-rda --disable-sid --disable-sim --disable-gdb --with-sysroot --disable-newlib --disable-libgloss --disable-werror
+
+    make
+
+    make install
+
+    # Build gcc
+
+    cd ../bld-or1k-gcc
+
+    ../or1k-gcc/configure --target=or1k-elf --prefix=/opt/or1k-toolchain --enable-languages=c --disable-shared --disable-libssp
+
+    make
+
+    make install
+
+    # build newlib and gdb (without or1ksim in this case)
+
+    cd ../bld-or1k-src
+
+    ../or1k-src/configure --target=or1k-elf --prefix=/opt/or1k-toolchain --enable-shared --disable-itcl --disable-tk --disable-tcl --disable-winsup --disable-libgui --disable-rda --disable-sid --enable-sim --disable-or1ksim --enable-gdb --with-sysroot --enable-newlib --enable-libgloss --disable-werror
+
+    make
+
+    make install
+
+    # build gcc again, this time with newlib
+
+    cd ../bld-or1k-gcc
+
+    ../or1k-gcc/configure --target=or1k-elf --prefix=/opt/or1k-toolchain --enable-languages=c,c++ --disable-shared --disable-libssp --with-newlib
+
+    make
+
+    make install
+
+Finally, we will want to run the following to put this path in our .bashrc file:
+
+    echo "# OpenRISC tool chain path" >> ~/.bashrc
+
+    echo "export PATH=\$PATH:/opt/or1k-toolchain/bin" >> ~/.bashrc
+
+Altera Quartus tools
+
+These are simply downloaded and installed, but take a long time!
+
+You will want to download the Quartus II Web Edition.
+
+It is recommended using the download manager program as it allows you to select exactly what to install.
+
+The following are example steps to do this:
+
+    Download the Quartus web installer
+        If that link doesn't work, go to the Quartus software download page
+        Click on Download Linux Version
+        Avoid registering to download on the next page by selecting the Get One-Time Access radio button and entering spurious details then clicking the Get One-Time Access button below those boxes.
+    Run the web installer, eg
+        chmod +x ~/Downloads/altera_installer.external.sh
+        ~/Downloads/altera_installer.external.sh
+    Click through and select to Download Installation Files from the Internet
+    Choose a destination directory of wherever you like, however this guide will assume /opt/altera/12.1.sp1
+    In the Products window expand the Device Families tree and tick the Cyclone IV E box - this is the family present on the DE0 Nano.
+    (Optional) Deselect the Modelsim-Altera Starter Edition (Free) as it's big and we won't be using it.
+    Continue through and have it install.
+
+When it's done, use the following to export the Altera tools to your $PATH:
+
+    echo "# Altera Quartus tools path" >> ~/.bashrc
+
+    echo "export ALTERA_PATH=/opt/altera/12.1sp1" >> ~/.bashrc
+
+    echo "export PATH=\$PATH:\$ALTERA_PATH/quartus/bin" >> ~/.bashrc
+
+Icarus Verilog and GTKWave
+
+These are both open source projects, and should be installable via any modern Linux distributions package management system. Under Ubuntu it's as easy as
+
+    sudo apt-get install iverilog gtkwave
+
+Otherwise see this guide on installing Icarus Verilog.
+
+Or see GTKWave's homepage to get source for it.
+OpenOCD
+
+OpenOCD is the debug proxy we'll use to talk to the board over JTAG.
+
+Download the source to $HOME/or1k with
+
+    git clone https://github.com/openrisc/openOCD.git
+
+Go into the OpenOCD directory and, the very first time, you must bootstrap it:
+
+    ./bootstrap
+
+Once that is finished, configure and compile it:
+
+    ./configure --enable-usb_blaster_libftdi --enable-adv_debug_sys --enable-altera_vjtag --enable-maintainer-mode
+
+    make
+
+You can run make install if you like, too.
+mor1k-dev-env and mor1kx
+
+The actual SoC development environment source is next.
+
+Clone this from the github repository into $HOME/or1k
+
+    git clone http://github.com/juliusbaxter/mor1kx-dev-env
+
+Once it's cloned, go into the mor1kx-dev-env directory and run a set script which will download the mor1kx core and set up a few other bits and pieces
+
+    ./scripts/bash/setup.sh
+
+Once everything is set up you can follow the guide to using the system to run some basic simulations.
+
+    Contact GitHub API Training Shop Blog About 
+
+    © 2016 GitHub, Inc. Terms Privacy Security Status Help 
+
