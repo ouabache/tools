@@ -1,4 +1,4 @@
-export XDG_CONFIG_HOME ="/home/sandbox/Desktop/DESIGN/config"
-export XDG_CACHE_HOME  ="/home/sandbox/Desktop/DESIGN/cache"
-export XDG_DATA_HOME   ="/home/sandbox/Desktop/DESIGN/data"
+export XDG_CONFIG_HOME="$PWD/config"
+export XDG_CACHE_HOME="$PWD/Projects"
+export XDG_DATA_HOME="$PWD/Index"
 
