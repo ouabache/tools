@@ -96,6 +96,9 @@ foreach my $repo ($workspace_xml->findnodes('//socgen:workspace/socgen:repos/soc
 
 my $number_of_cpus;
 my $workspace;
+my $child;
+my $code;
+my $data;
 my $yellow_pages;
 my $io_ports;
 my $doc_dir;
@@ -105,17 +108,24 @@ foreach my $repo ($workspace_xml->findnodes('//socgen:workspace'))
                   {
                   $number_of_cpus  = $repo->findnodes('./socgen:number_of_cpus/text()')->to_literal ;
                   $workspace       = $repo->findnodes('./socgen:build_dir/text()')->to_literal ;
+                  $child           = $repo->findnodes('./socgen:child_dir/text()')->to_literal ;
+                  $code            = $repo->findnodes('./socgen:code_dir/text()')->to_literal ;
+                  $data            = $repo->findnodes('./socgen:data_dir/text()')->to_literal ;
                   $yellow_pages    = $repo->findnodes('./socgen:yp_dir/text()')->to_literal ;
                   $io_ports        = $repo->findnodes('./socgen:ports_dir/text()')->to_literal ;
                   $doc_dir         = $repo->findnodes('./socgen:doc_dir/text()')->to_literal ;
-
                   }
 
-unless(defined $number_of_cpus)  {    $number_of_cpus = 1;         }
-unless(defined $workspace     )  {    $workspace      = "work";    }
-unless(defined $yellow_pages  )  {    $yellow_pages   = "yp";      }
-unless(defined $io_ports      )  {    $io_ports       = "io_ports";}
-unless(defined $doc_dir       )  {    $doc_dir        = "doc_dir"; }
+
+
+unless(defined $number_of_cpus)  {    $number_of_cpus = 1;          }
+unless(defined $workspace     )  {    $workspace      = "work";     }
+unless(defined $child         )  {    $child          = "children"; }
+unless(defined $code          )  {    $code           = "code";     }
+unless(defined $data          )  {    $data           = "dbs";      }
+unless(defined $yellow_pages  )  {    $yellow_pages   = "yp";       }
+unless(defined $io_ports      )  {    $io_ports       = "io_ports"; }
+unless(defined $doc_dir       )  {    $doc_dir        = "doc_dir";  }
 
 #print "number_of_cpus  $number_of_cpus  \n";
 #print "workspace       $workspace  \n";
@@ -126,7 +136,7 @@ my $path  = "${home}/${yellow_pages}";
 
 unless( -e $path )
 {
-print "$path does not exist \n";
+print "Creating Yellow Pages \n";
 my $cmd = "./tools/yp/create_yp $path \n";
 if(system($cmd)){};
 }
@@ -220,6 +230,26 @@ sub get_number_of_cpus
 
 
 
+#/***********************************************************************************************/
+#/  get_child_dir                                                                               */
+#/                                                                                              */
+#/  returns name  of child directory                                                            */
+#/                                                                                              */
+#/  my $child_dir  = yp::lib::get_child_dir ();                                        */
+#/                                                                                              */
+#/***********************************************************************************************/
+
+sub get_child_dir
+   {
+   return("${child}");
+   }
+
+
+
+
+
+
+
 
 #/***************************************************************************************************/
 #/  get_io_ports_db_filename                                                                        */
@@ -253,24 +283,66 @@ sub get_io_ports_db_filename
 
 
 
-#/******************************************************************************************************/
-#/  get_io_busses_db_filename                                                                          */
-#/                                                                                                     */
-#/  returns full path name to io_busses database filename                                              */
-#/                                                                                                     */
-#/  my $io_busses_filename = yp::lib::get_io_busses_db_filename($vendor,$library,$component,$version); */
-#/                                                                                                     */
-#/******************************************************************************************************/
+#/*************************************************************************************************************/
+#/  get_io_busses_db_filename                                                                                 */
+#/                                                                                                            */
+#/  returns full path name to io_busses database filename                                                     */
+#/                                                                                                            */
+#/  my $io_busses_filename = yp::lib::get_io_busses_db_filename($vendor,$library,$component,$version,config); */
+#/                                                                                                            */
+#/*************************************************************************************************************/
 
 sub get_io_busses_db_filename
    {
    my @params     = @_;
+   my $config     = pop(@params);
    my $version    = pop(@params);
    my $component  = pop(@params);
    my $library    = pop(@params);
    my $vendor     = pop(@params);
    my $main_module_name = yp::lib::get_module_name($vendor,$library,$component,$version) ;
-   my $io_busses_db_filename = "${home}/${io_ports}/${vendor}__${library}/${component}/${main_module_name}/BUSSES.dbm";
+   my $io_busses_db_filename;
+
+   if(defined $config && length $config > 0)   
+   {
+   $io_busses_db_filename = "${home}/${io_ports}/${vendor}__${library}/${component}/${main_module_name}/BUSSES.dbm";
+   }
+   else
+   {
+   $io_busses_db_filename = "${home}/${io_ports}/${vendor}__${library}/${component}/${main_module_name}/${config}/BUSSES.dbm";
+   }
+
+
+   if(-e ${io_busses_db_filename } ) 
+     { 
+     return("${io_busses_db_filename}");
+     }
+   my $cmd = "./tools/verilog/gen_ports    -vendor $vendor -library  $library  -component $component  -version $version   ";
+   if (system($cmd)) {}
+   return("${io_busses_db_filename}");
+   }
+
+
+
+#/******************************************************************************************************/
+#/  get_io_busses_name_db_filename                                                                     */
+#/                                                                                                     */
+#/  returns full path name to io_busses database named filename                                        */
+#/                                                                                                     */
+#/  my $io_busses_filename = yp::lib::get_io_busses_name_db_filename($vendor,$library,$component,$version); */
+#/                                                                                                     */
+#/******************************************************************************************************/
+
+sub get_io_busses_named_db_filename
+   {
+   my @params     = @_;
+   my $name       = pop(@params);
+   my $version    = pop(@params);
+   my $component  = pop(@params);
+   my $library    = pop(@params);
+   my $vendor     = pop(@params);
+   my $main_module_name = yp::lib::get_module_name($vendor,$library,$component,$version) ;
+   my $io_busses_db_filename = "${home}/${io_ports}/${vendor}__${library}/${component}/${main_module_name}_${name}/BUSSES.dbm";
 
    if(-e ${io_busses_db_filename } ) 
      { 
@@ -305,17 +377,81 @@ sub get_elab_db_filename
    
    my $elab_db_filename;
 
-   if($configuration eq "default")
+   mkdir "${home}/${data}",0755  unless (-e "${home}/${data}" );
+
+   if($configuration eq "xxxxxx")
    {
-    $elab_db_filename = "${home}/dbs/${vendor}_${library}_${component}_${version}.db";
+    $elab_db_filename = "${home}/${data}/${vendor}_${library}_${component}_${version}.db";
    }
    else
    {
-    $elab_db_filename = "${home}/dbs/${vendor}_${library}_${component}_${version}_${configuration}.db";
+    $elab_db_filename = "${home}/${data}/${vendor}_${library}_${component}_${version}_${configuration}.db";
    }
 
    return("${elab_db_filename}");
    }
+
+
+
+
+#/***********************************************************************************************************/
+#/  get_design_db_file                                                                                      */
+#/                                                                                                          */
+#/  returns full path name to design database filename                                                      */
+#/                                                                                                          */
+#/  my $design_db_file = yp::lib::get_design_db_file;  */
+#/                                                                                                          */
+#/***********************************************************************************************************/
+
+sub get_design_db_file
+   {
+
+   mkdir "${home}/${data}",0755  unless (-e "${home}/${data}" );
+   return("${home}/${data}/design.dbm");
+   }
+
+
+
+
+
+
+#/***************************************************************************************************/
+#/  get_component configs                                                                           */
+#/                                                                                                  */
+#/  returns array of config_n's for component                                                       */
+#/                                                                                                  */
+#/  my @configs  = yp::lib::get_component_configs($vendor,$library,$component,$version);            */
+#/                                                                                                  */
+#/***************************************************************************************************/
+
+sub get_component_configs
+   {
+   my @params     = @_;
+   my $version    = pop(@params);
+   my $component  = pop(@params);
+   my $library    = pop(@params);
+   my $vendor     = pop(@params);
+
+   my $main_module_name = yp::lib::get_module_name($vendor,$library,$component,$version) ;
+   my $Config_db_file = "${io_ports}/${vendor}__${library}/${component}/${main_module_name}/Config.db";
+
+   unless(-e $Config_db_file  ){return();}
+
+   my  $config_db   = new BerkeleyDB::Hash( -Filename => $Config_db_file, -Flags => DB_CREATE ) or die "Cannot open ${Config_db_file}: $!";
+   my  @configs  = (); 
+   my  $key;
+   my  $value;
+   my  $port_cursor = $config_db->db_cursor() ;
+       while ($port_cursor->c_get($key, $value, DB_NEXT) == 0) 
+          {
+          push (@configs, $key);       
+          }
+   my  $status = $port_cursor->c_close() ;
+       $config_db   -> db_close();
+   return(@configs);
+
+   }
+
 
 
 
@@ -365,6 +501,8 @@ sub get_signals
    my  $status = $port_cursor->c_close() ;
 
        @signals      = sys::lib::trim_sort(@signals);
+
+       $ports_db   -> db_close();
    return(@signals);
    }
 
@@ -410,7 +548,7 @@ sub get_Parameters
           }
 
    my  $status = $port_cursor->c_close() ;
-
+       $ports_db   -> db_close();
        @parameters      = sys::lib::trim_sort(@parameters);
    return(@parameters);
    }
@@ -453,7 +591,7 @@ sub get_parameters
           }
 
    my  $status = $port_cursor->c_close() ;
-
+       $ports_db   -> db_close();
        @parameters      = sys::lib::trim_sort(@parameters);
    return(@parameters);
    }
@@ -487,7 +625,7 @@ sub get_instance_names
    my  $field2;
    my  $key;
    my  $value;
-#   print "QQQQQQQQQQ  get_instance_names $vendor,$library,$component,$version \n ";
+
 
    my  $port_cursor = $ports_db->db_cursor() ;
        while ($port_cursor->c_get($key, $value, DB_NEXT) == 0) 
@@ -503,7 +641,7 @@ sub get_instance_names
           }
 
    my  $status = $port_cursor->c_close() ;
-
+       $ports_db   -> db_close();
        @instance_names      = sys::lib::trim_sort(@instance_names);
    return(@instance_names);
    }
@@ -513,7 +651,7 @@ sub get_instance_names
 #/***********************************************************************************************************/
 #/  get_instance_module_name                                                                                */
 #/                                                                                                          */
-#/  returns the module anme of an instance                                                                  */
+#/  returns the module name of an instance                                                                  */
 #/                                                                                                          */
 #/  my $module_name  = yp::lib::get_instance_module_name($vendor,$library,$component,$version,$instance,$configuration );  */
 #/                                                                                                          */
@@ -539,7 +677,39 @@ sub get_instance_module_name
    $elab_db->db_get("component___root.${instance}", $module_vlnv );
    ( $module_vendor,$module_library,$module_component,$module_version) = split( /\:/ , $module_vlnv);
      $module_name = yp::lib::get_module_name($module_vendor,$module_library,$module_component,$module_version) ;
+       $elab_db   -> db_close();
    return($module_name);
+   }
+
+
+
+
+#/*************************************************************************************************************/
+#/  get_instance_vlnvc                                                                                        */
+#/                                                                                                            */
+#/  returns the ven,lib,cmp,ver,cfg  name for a components instance                                           */
+#/                                                                                                            */
+#/  my $vlnvc  = yp::lib::get_instance_vlnvc($vendor,$library,$component,$version,$instance,$configuration ); */
+#/                                                                                                            */
+#/*************************************************************************************************************/
+
+sub get_instance_vlnvc
+   {
+   my @params     = @_;
+   my $configuration     = pop(@params);
+   my $instance          = pop(@params);
+   my $version           = pop(@params);
+   my $component         = pop(@params);
+   my $library           = pop(@params);
+   my $vendor            = pop(@params);
+   my $elab_db_filename  = yp::lib::get_elab_db_filename($vendor,$library,$component,$version,$configuration);
+   my $elab_db           = new BerkeleyDB::Hash( -Filename => $elab_db_filename, -Flags => DB_CREATE ) or die "Cannot open ${elab_db_filename}: $!";
+
+   my $module_vlnv;
+
+   $elab_db->db_get("component___root.${instance}", $module_vlnv );
+       $elab_db   -> db_close();
+   return($module_vlnv);
    }
 
 
@@ -565,7 +735,7 @@ sub get_instance_conns
    my $library    = pop(@params);
    my $vendor     = pop(@params);
 
-   my $io_busses_db_filename = yp::lib::get_io_busses_db_filename($vendor,$library,$component,$version);
+   my $io_busses_db_filename = yp::lib::get_io_busses_db_filename($vendor,$library,$component,$version,"default");
 
 
 
@@ -643,7 +813,7 @@ sub get_instance_conns
             }
           }
    my  $status = $port_cursor->c_close() ;
-
+       $ports_db   -> db_close();
        @inst_conns      = sys::lib::trim_sort(@inst_conns);
    return(@inst_conns);
    }
@@ -669,7 +839,7 @@ sub get_instance_adhoc_conns
    my $library    = pop(@params);
    my $vendor     = pop(@params);
 
-   my $io_busses_db_filename = yp::lib::get_io_busses_db_filename($vendor,$library,$component,$version);
+   my $io_busses_db_filename = yp::lib::get_io_busses_db_filename($vendor,$library,$component,$version,"default");
 
    unless (-e ${io_busses_db_filename } ) 
       { 
@@ -720,7 +890,7 @@ sub get_instance_adhoc_conns
 
           }
    my  $status = $port_cursor->c_close() ;
-
+       $ports_db   -> db_close();
        @inst_conns      = sys::lib::trim_sort(@inst_conns);
    return(@inst_conns);
    }
@@ -750,7 +920,7 @@ sub get_busses
    my $vendor     = pop(@params);
 
 
-   my $io_busses_db_filename = yp::lib::get_io_busses_db_filename($vendor,$library,$component,$version);
+   my $io_busses_db_filename = yp::lib::get_io_busses_db_filename($vendor,$library,$component,$version,"default");
 
    unless (-e ${io_busses_db_filename } ) 
       { 
@@ -785,10 +955,58 @@ sub get_busses
               }
           }
    my  $status = $port_cursor->c_close() ;
-
+       $ports_db   -> db_close();
    @busses      = sys::lib::trim_sort(@busses);
    return(@busses);
    }
+
+
+
+#/********************************************************************************************************/
+#/  get_files                                                                                            */
+#/                                                                                                       */
+#/  returns array of all verilog usertypes in a component                                                */
+#/                                                                                                       */
+#/  my @fragments  = yp::lib::get_files($vendor,$library,$component,$version,$fileSet_name,"fragment");  */
+#/                                                                                                       */
+#/********************************************************************************************************/
+
+sub get_files
+   {
+   my @params     = @_;
+   my $userType       = pop(@params);
+   my $fileSet_name   = pop(@params);
+   my $version        = pop(@params);
+   my $component      = pop(@params);
+   my $library        = pop(@params);
+   my $vendor         = pop(@params);
+   my $elab_db_filename = yp::lib::get_elab_db_filename($vendor,$library,$component,$version,"default");
+   my $elab_db   = new BerkeleyDB::Hash( -Filename => $elab_db_filename, -Flags => DB_CREATE ) or die "Cannot open ${elab_db_filename}: $!";
+   my  @files  = (); 
+   my  $key;
+   my  $value;
+   my  $port_cursor = $elab_db->db_cursor() ;
+       while ($port_cursor->c_get($key, $value, DB_NEXT) == 0) 
+          {
+	  my $FILE_root;
+	  my $fragment;
+          ( $FILE_root,$fragment) = split( /\__/ , $key);
+          if($FILE_root eq "FILE_verilogSource_${fileSet_name}_${userType}")
+            {
+            push (@files, "${value}");       
+            }
+          }
+
+   my  $status = $port_cursor->c_close() ;
+       $elab_db   -> db_close();
+       @files      = sys::lib::trim_sort(@files);
+   return(@files);
+   }
+
+
+
+
+
 
 
 #/***************************************************************************************************/
@@ -871,13 +1089,13 @@ sub find_ipxact_design
    my $component  = pop(@params);
    my $library    = pop(@params);
    my $vendor     = pop(@params);
-   my $data;
+   my $design_data;
    my $design_xml_sep ;
    my $design_xml_file ;
    my $design_version;
 
-      $design_db->db_get("${vendor}__${library}_${component}_${version}", $data );
-      ( $design_xml_file, $design_xml_sep,$design_version ) = split ':', $data;
+      $design_db->db_get("${vendor}__${library}_${component}_${version}", $design_data );
+      ( $design_xml_file, $design_xml_sep,$design_version ) = split ':', $design_data;
 
       return("$design_xml_file");
    }
@@ -900,7 +1118,7 @@ sub find_ipxact_abstractionDefinition
    my $library    = pop(@params);
    my $vendor     = pop(@params);
 
-   my $data;
+   my $design_data;
    my $design_xml_sep ;
    my $design_xml_file ;
    my $design_version;
@@ -909,8 +1127,8 @@ sub find_ipxact_abstractionDefinition
    my $design_vendor;
 
 
-      $abstractionDefinition_db->db_get("${vendor}__${library}_${component}_${version}", $data );
-      ( $design_xml_file, $design_xml_sep,$design_version,$design_name,$design_library,$design_vendor ) = split ':', $data;
+      $abstractionDefinition_db->db_get("${vendor}__${library}_${component}_${version}", $design_data );
+      ( $design_xml_file, $design_xml_sep,$design_version,$design_name,$design_library,$design_vendor ) = split ':', $design_data;
 
       return("$design_xml_file");
 
@@ -935,14 +1153,14 @@ sub find_ipxact_busDefinition
    my $library    = pop(@params);
    my $vendor     = pop(@params);
 
-   my $data;
+   my $design_data;
    my $design_xml_sep ;
    my $design_xml_file ;
    my $design_version;
 
 
-      $busDefinition_db->db_get("${vendor}__${library}_${component}_${version}", $data );
-      ( $design_xml_file, $design_xml_sep,$design_version ) = split ':', $data;
+      $busDefinition_db->db_get("${vendor}__${library}_${component}_${version}", $design_data );
+      ( $design_xml_file, $design_xml_sep,$design_version ) = split ':', $design_data;
 
       return("$design_xml_file");
    }
@@ -1134,7 +1352,7 @@ sub find_lib_sw_dir
       $lib_sw_dir  = $socgen_libraryConfiguration->findnodes('//socgen:libraryConfiguration/socgen:lib_sw_dir/text()')->to_literal ;
    }
 
-      return("/${lib_sw_dir}");
+      return("${lib_sw_dir}");
 
    }
 
@@ -1572,7 +1790,7 @@ sub get_module_name
    my $socgen_component_filename  = yp::lib::find_componentConfiguration($vendor,$library,$component);  
    unless($socgen_component_filename)
       {
-	  return("${component}_${version}");
+	  return("");
       }
    my $socgen_component_file  = $parser->parse_file($socgen_component_filename);  
 
@@ -1598,72 +1816,17 @@ sub get_module_name
 #/                                                                                            */
 #/*********************************************************************************************/
 
-
-
 sub parse_component_file
    {
-   my @params     = @_;
-   my $version    = pop(@params);
-   my $component  = pop(@params);
-   my $library    = pop(@params);
-   my $vendor     = pop(@params);
-
-   my $parser     = XML::LibXML->new();
-
-
-   my $spirit_cmp_filename =yp::lib::find_ipxact_component($vendor,$library,$component,$version ); 
-
-   unless($spirit_cmp_filename)
-      {
-      print("spirit:component MISSING   $vendor,$library,$component,$version \n"); 
-      }
-
-
-   my $spirit_component_file  = $parser->parse_file(yp::lib::find_ipxact_component($vendor,$library,$component,$version )); 
-
-
-   my $line;
-
-   my      @filelist_acc = (  );
-   push(@filelist_acc,"::${vendor}::${library}::${component}::${version}::");
-   
-   foreach my $new_comp ($spirit_component_file->findnodes("//spirit:component/spirit:model/spirit:views/spirit:view/spirit:vendorExtensions/spirit:componentRef")) 
-     {
-     my($new_vendor)        = $new_comp->findnodes('./@spirit:vendor')->to_literal ;
-     my($new_library)       = $new_comp->findnodes('./@spirit:library')->to_literal ;
-     my($new_name)          = $new_comp->findnodes('./@spirit:name')->to_literal ;
-     my($new_version)       = $new_comp->findnodes('./@spirit:version')->to_literal ;
-     my @filelist_sub       = parse_component_fileX($new_vendor,$new_library,$new_name,$new_version);
-                              foreach $line (@filelist_sub) { push(@filelist_acc,"$line"); }
-     }
-
-   foreach my $new_comp ($spirit_component_file->findnodes("//spirit:component/spirit:model/spirit:views/spirit:view/spirit:hierarchyRef")) 
-     {
-     my($new_vendor)        = $new_comp->findnodes('./@spirit:vendor')->to_literal ;
-     my($new_library)       = $new_comp->findnodes('./@spirit:library')->to_literal ;
-     my($new_name)          = $new_comp->findnodes('./@spirit:name')->to_literal ;
-     my($new_version)       = $new_comp->findnodes('./@spirit:version')->to_literal ;
-
-     if(yp::lib::find_ipxact_design($new_vendor,$new_library,$new_name,$new_version ))
-             {
-             my $spirit_design_file = $parser->parse_file(yp::lib::find_ipxact_design($new_vendor,$new_library,$new_name,$new_version )); 
-             foreach  my   $i_name ($spirit_design_file->findnodes("//spirit:design/spirit:componentInstances/spirit:componentInstance/spirit:componentRef/\@spirit:vendor"))
-                {
-                my($vendor_name)         = $i_name  ->to_literal ;
-                my($library_name)        = $i_name  ->findnodes('../@spirit:library')->to_literal ;
-                my($component_name)      = $i_name  ->findnodes('../@spirit:name')->to_literal ;
-                my($version_name)        = $i_name  ->findnodes('../@spirit:version')->to_literal ;
-
-                push(@filelist_acc,"::${vendor_name}::${library_name}::${component_name}::${version_name}::");
-                my  @filelist_sub = parse_component_fileX($vendor_name,$library_name,$component_name,$version_name);
-                  foreach $line (@filelist_sub) { push(@filelist_acc,"$line"); }
-                }            
-             }
-     }
-
-   @filelist_acc     =       sys::lib::trim_sort(@filelist_acc);
+   my @params             = @_;
+   my $version            = pop(@params);
+   my $component          = pop(@params);
+   my $library            = pop(@params);
+   my $vendor             = pop(@params);
+   my @filelist_acc       = parse_component_fileX($vendor,$library,$component,$version,1);
    return(@filelist_acc);
-}
+   }
+
 
 
 
@@ -1672,68 +1835,121 @@ sub parse_component_file
 sub parse_component_fileX
    {
    my @params     = @_;
+   my $switch     = pop(@params);
    my $version    = pop(@params);
    my $component  = pop(@params);
    my $library    = pop(@params);
    my $vendor     = pop(@params);
-
    my $parser     = XML::LibXML->new();
-
-
    my $spirit_cmp_filename =yp::lib::find_ipxact_component($vendor,$library,$component,$version ); 
 
    unless($spirit_cmp_filename)
       {
-      print("spirit:component MISSING   $vendor,$library,$component,$version \n"); 
+      print("ipxact:component MISSING   $vendor,$library,$component,$version \n"); 
       }
 
-
    my $spirit_component_file  = $parser->parse_file(yp::lib::find_ipxact_component($vendor,$library,$component,$version )); 
-
-
    my $line;
-
    my      @filelist_acc = (  );
 
-   
-   foreach my $new_comp ($spirit_component_file->findnodes("//spirit:component/spirit:model/spirit:views/spirit:view/spirit:vendorExtensions/spirit:componentRef")) 
+   if($switch)     {   push(@filelist_acc,"::${vendor}::${library}::${component}::${version}::");}  
+
+   foreach my $new_comp ($spirit_component_file->findnodes("//ipxact:component/ipxact:model/ipxact:views/ipxact:view/ipxact:vendorExtensions/ipxact:componentRef")) 
      {
-     my($new_vendor)        = $new_comp->findnodes('./@spirit:vendor')->to_literal ;
-     my($new_library)       = $new_comp->findnodes('./@spirit:library')->to_literal ;
-     my($new_name)          = $new_comp->findnodes('./@spirit:name')->to_literal ;
-     my($new_version)       = $new_comp->findnodes('./@spirit:version')->to_literal ;
-     my @filelist_sub       = parse_component_fileX($new_vendor,$new_library,$new_name,$new_version);
+     my($new_vendor)        = $new_comp->findnodes('./@ipxact:vendor')->to_literal ;
+     my($new_library)       = $new_comp->findnodes('./@ipxact:library')->to_literal ;
+     my($new_name)          = $new_comp->findnodes('./@ipxact:name')->to_literal ;
+     my($new_version)       = $new_comp->findnodes('./@ipxact:version')->to_literal ;
+     my @filelist_sub       = parse_component_fileX($new_vendor,$new_library,$new_name,$new_version,0);
                               foreach $line (@filelist_sub) { push(@filelist_acc,"$line"); }
      }
 
-   foreach my $new_comp ($spirit_component_file->findnodes("//spirit:component/spirit:model/spirit:views/spirit:view/spirit:hierarchyRef")) 
+   foreach my $new_comp ($spirit_component_file->findnodes("//ipxact:component/ipxact:model/ipxact:views/ipxact:view/ipxact:hierarchyRef")) 
      {
-     my($new_vendor)        = $new_comp->findnodes('./@spirit:vendor')->to_literal ;
-     my($new_library)       = $new_comp->findnodes('./@spirit:library')->to_literal ;
-     my($new_name)          = $new_comp->findnodes('./@spirit:name')->to_literal ;
-     my($new_version)       = $new_comp->findnodes('./@spirit:version')->to_literal ;
+     my($new_vendor)        = $new_comp->findnodes('./@ipxact:vendor')->to_literal ;
+     my($new_library)       = $new_comp->findnodes('./@ipxact:library')->to_literal ;
+     my($new_name)          = $new_comp->findnodes('./@ipxact:name')->to_literal ;
+     my($new_version)       = $new_comp->findnodes('./@ipxact:version')->to_literal ;
 
      if(yp::lib::find_ipxact_design($new_vendor,$new_library,$new_name,$new_version ))
-          {
-          my $spirit_design_file = $parser->parse_file(yp::lib::find_ipxact_design($new_vendor,$new_library,$new_name,$new_version )); 
-          foreach  my   $i_name ($spirit_design_file->findnodes("//spirit:design/spirit:componentInstances/spirit:componentInstance/spirit:componentRef/\@spirit:vendor"))
+     {
+#	 print "FFFFFFFF  $new_vendor $new_library $new_name $new_version  hierarchyRef \n";
+             my $spirit_design_file = $parser->parse_file(yp::lib::find_ipxact_design($new_vendor,$new_library,$new_name,$new_version )); 
+             foreach  
+                my   $i_name ($spirit_design_file->findnodes("//ipxact:design/ipxact:componentInstances/ipxact:componentInstance/ipxact:componentRef"))
                 {
-                my($vendor_name)         = $i_name  ->to_literal ;
-                my($library_name)        = $i_name  ->findnodes('../@spirit:library')->to_literal ;
-                my($component_name)      = $i_name  ->findnodes('../@spirit:name')->to_literal ;
-                my($version_name)        = $i_name  ->findnodes('../@spirit:version')->to_literal ;
+                my($vendor_name)         = $i_name  ->findnodes('./@vendor')->to_literal ;
+                my($library_name)        = $i_name  ->findnodes('./@library')->to_literal ;
+                my($component_name)      = $i_name  ->findnodes('./@name')->to_literal ;
+                my($version_name)        = $i_name  ->findnodes('./@version')->to_literal ;
 
                 push(@filelist_acc,"::${vendor_name}::${library_name}::${component_name}::${version_name}::");
-                my  @filelist_sub = parse_component_fileX($vendor_name,$library_name,$component_name,$version_name);
+                my  @filelist_sub = parse_component_fileX($vendor_name,$library_name,$component_name,$version_name,0);
                   foreach $line (@filelist_sub) { push(@filelist_acc,"$line"); }
-                }       
-           
-           }
+                }            
+             }
      }
+
+
+
+   foreach my $new_comp ($spirit_component_file->findnodes("//ipxact:component/ipxact:model/ipxact:views/ipxact:view/ipxact:designInstantiationRef/text()")) 
+     {
+     my($designInsref_value)         = $new_comp  ->to_literal ;
+     my($designInsref_name)          = $new_comp  ->findnodes('../../ipxact:name')->to_literal ;
+
+
+   foreach my $new_comp ($spirit_component_file->findnodes("//ipxact:component/ipxact:model/ipxact:instantiations/ipxact:designInstantiation")) 
+        {
+ 		my($t_ref)           = $new_comp->findnodes('./ipxact:name/text()')->to_literal ;
+		my($t_vendor)        = $new_comp->findnodes('./ipxact:designRef/@vendor')->to_literal ;
+		my($t_library)       = $new_comp->findnodes('./ipxact:designRef/@library')->to_literal ;
+		my($t_name)          = $new_comp->findnodes('./ipxact:designRef/@name')->to_literal ;
+		my($t_version)       = $new_comp->findnodes('./ipxact:designRef/@version')->to_literal ;
+
+
+        if($t_ref eq $designInsref_name )
+	{
+
+
+
+	    
+
+        if(yp::lib::find_ipxact_design($t_vendor,$t_library,$t_name,$t_version ))
+             {
+
+             my $spirit_design_file = $parser->parse_file(yp::lib::find_ipxact_design($t_vendor,$t_library,$t_name,$t_version )); 
+             foreach  
+                my   $i_name ($spirit_design_file->findnodes("//ipxact:design/ipxact:componentInstances/ipxact:componentInstance/ipxact:componentRef"))
+                {
+                my($vendor_name)         = $i_name  ->findnodes('./@vendor')->to_literal ;
+                my($library_name)        = $i_name  ->findnodes('./@library')->to_literal ;
+                my($component_name)      = $i_name  ->findnodes('./@name')->to_literal ;
+                my($version_name)        = $i_name  ->findnodes('./@version')->to_literal ;
+
+                push(@filelist_acc,"::${vendor_name}::${library_name}::${component_name}::${version_name}::");
+                my  @filelist_sub = parse_component_fileX($vendor_name,$library_name,$component_name,$version_name,0);
+                  foreach $line (@filelist_sub) { push(@filelist_acc,"$line"); }
+                }            
+             }
+        }
+        }
+     }
+
+
+
+
+
+
+
+   
 
    @filelist_acc     =       sys::lib::trim_sort(@filelist_acc);
    return(@filelist_acc);
 }
+
+
+
+
 
 
 
@@ -1745,7 +1961,7 @@ sub parse_component_fileX
 #/                                                                                            */
 #/  returns names for component brothers                                                      */
 #/                                                                                            */
-#/   my @filelist = yp::lib::parse_component_brother($vendor,$library,$component,$version);   */
+#/   my @filelist = yp::lib::parse_component_brothers($vendor,$library,$component,$version);   */
 #/                                                                                            */
 #/*********************************************************************************************/
 
@@ -1765,12 +1981,12 @@ sub parse_component_brothers
    my      @filelist_acc = (  );
    push(@filelist_acc,"::${vendor}::${library}::${component}::${version}::");
    
-   foreach my $new_comp ($spirit_component_file->findnodes("//spirit:component/spirit:model/spirit:views/spirit:view/spirit:vendorExtensions/spirit:componentRef")) 
+   foreach my $new_comp ($spirit_component_file->findnodes("//ipxact:component/ipxact:model/ipxact:views/ipxact:view/ipxact:vendorExtensions/ipxact:componentRef")) 
      {
-     my($new_vendor)        = $new_comp->findnodes('./@spirit:vendor')->to_literal ;
-     my($new_library)       = $new_comp->findnodes('./@spirit:library')->to_literal ;
-     my($new_component)     = $new_comp->findnodes('./@spirit:name')->to_literal ;
-     my($new_version)       = $new_comp->findnodes('./@spirit:version')->to_literal ;
+     my($new_vendor)        = $new_comp->findnodes('./@ipxact:vendor')->to_literal ;
+     my($new_library)       = $new_comp->findnodes('./@ipxact:library')->to_literal ;
+     my($new_component)     = $new_comp->findnodes('./@ipxact:name')->to_literal ;
+     my($new_version)       = $new_comp->findnodes('./@ipxact:version')->to_literal ;
      push(@filelist_acc,"::${new_vendor}::${new_library}::${new_component}::${new_version}::");
      }
 
@@ -1782,7 +1998,7 @@ sub parse_component_brothers
 #/                                                                                                    */
 #/  returns parser tokens  to ip-xact design files referred to by component file vlnv                 */
 #/                                                                                                    */
-#/  my @spirit_design_files = yp::lib::find_ipxact_design_file($vendor,$library,$component,$version);  */
+#/  my @spirit_design_files = yp::lib::find_ipxact_design_files($vendor,$library,$component,$version);  */
 #/                                                                                                    */
 #/*****************************************************************************************************/
 
@@ -1800,26 +2016,102 @@ sub find_ipxact_design_files
    unless (yp::lib::find_ipxact_component($vendor,$library,$component,$version)){print "Missing Component  $vendor, $library, $component, $version \n";  }
    my $spirit_component_file    = $parser->parse_file(yp::lib::find_ipxact_component($vendor,$library,$component,$version));
 
-   foreach my $new_comp ($spirit_component_file->findnodes("//spirit:component/spirit:model/spirit:views/spirit:view/spirit:vendorExtensions/spirit:componentRef")) 
+   foreach my $new_comp ($spirit_component_file->findnodes("//ipxact:component/ipxact:model/ipxact:views/ipxact:view/ipxact:vendorExtensions/ipxact:componentRef")) 
      {
-     my($new_vendor)        = $new_comp->findnodes('./@spirit:vendor')->to_literal ;
-     my($new_library)       = $new_comp->findnodes('./@spirit:library')->to_literal ;
-     my($new_name)          = $new_comp->findnodes('./@spirit:name')->to_literal ;
-     my($new_version)       = $new_comp->findnodes('./@spirit:version')->to_literal ;
+     my($new_vendor)        = $new_comp->findnodes('./@ipxact:vendor')->to_literal ;
+     my($new_library)       = $new_comp->findnodes('./@ipxact:library')->to_literal ;
+     my($new_name)          = $new_comp->findnodes('./@ipxact:name')->to_literal ;
+     my($new_version)       = $new_comp->findnodes('./@ipxact:version')->to_literal ;
      my @filelist_sub       = yp::lib::find_ipxact_design_files($new_vendor,$new_library,$new_name,$new_version);
                               foreach my $line (@filelist_sub) { push(@design_files,"$line"); }     }
 
-   foreach my $comp_view ($spirit_component_file->findnodes('//spirit:component/spirit:model/spirit:views/spirit:view')) 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   
+   foreach my $comp_view ($spirit_component_file->findnodes('//ipxact:component/ipxact:model/ipxact:views/ipxact:view')) 
       {
-      my($hier_ref_vendor)         = $comp_view->findnodes('./spirit:hierarchyRef/@spirit:vendor')->to_literal ;
-      my($hier_ref_library)        = $comp_view->findnodes('./spirit:hierarchyRef/@spirit:library')->to_literal ;
-      my($hier_ref_design)         = $comp_view->findnodes('./spirit:hierarchyRef/@spirit:name')->to_literal ;
-      my($hier_ref_version)        = $comp_view->findnodes('./spirit:hierarchyRef/@spirit:version')->to_literal ;
+      my($hier_ref_vendor)         = $comp_view->findnodes('./ipxact:hierarchyRef/@ipxact:vendor')->to_literal ;
+      my($hier_ref_library)        = $comp_view->findnodes('./ipxact:hierarchyRef/@ipxact:library')->to_literal ;
+      my($hier_ref_design)         = $comp_view->findnodes('./ipxact:hierarchyRef/@ipxact:name')->to_literal ;
+      my($hier_ref_version)        = $comp_view->findnodes('./ipxact:hierarchyRef/@ipxact:version')->to_literal ;
       if(find_ipxact_design($hier_ref_vendor,$hier_ref_library,$hier_ref_design,$hier_ref_version))
-        {
+      {
+#	print "FFFFFFFF $hier_ref_vendor  $hier_ref_library $hier_ref_design  $hier_ref_version   hierarchyRef \n";
         push(@design_files,":::${hier_ref_vendor}:::${hier_ref_library}:::${hier_ref_design}:::${hier_ref_version}:::");           
         }
       }
+
+
+
+   foreach my $comp_view ($spirit_component_file->findnodes("//ipxact:component/ipxact:model/ipxact:views/ipxact:view/ipxact:designInstantiationRef/text()")) 
+     {
+     my($designInsref_value)         = $comp_view  ->to_literal ;
+     my($designInsref_name)          = $comp_view  ->findnodes('../../ipxact:name')->to_literal ;
+
+
+   foreach my $comp_view ($spirit_component_file->findnodes("//ipxact:component/ipxact:model/ipxact:instantiations/ipxact:designInstantiation")) 
+        {
+
+        my($t_ref)           = $comp_view->findnodes('./ipxact:name/text()')->to_literal ;
+	my($t_vendor)        = $comp_view->findnodes('./ipxact:designRef/@vendor')->to_literal ;
+	my($t_library)       = $comp_view->findnodes('./ipxact:designRef/@library')->to_literal ;
+	my($t_name)          = $comp_view->findnodes('./ipxact:designRef/@name')->to_literal ;
+	my($t_version)       = $comp_view->findnodes('./ipxact:designRef/@version')->to_literal ;
+		
+        if($t_ref eq $designInsref_name )
+	{
+
+      if(find_ipxact_design($t_vendor,$t_library,$t_name,$t_version))
+      {
+#	print "FFFFFFFF  $t_vendor $t_library $t_name $t_version  designInstantiationRef \n";
+        push(@design_files,":::${t_vendor}:::${t_library}:::${t_name}:::${t_version}:::");           
+        }
+
+
+
+		 
+
+        }
+        }
+     }
+
+
+
+
+
+
+   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   
      return(@design_files);
    }
 

@@ -1,0 +1,42 @@
+read_verilog /home/johne/socgen_xxx/children/opencores.org__Mos6502/ip/T6502/rtl/xml/../views/syn/T6502_ctrl.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__Mos6502/ip/T6502/rtl/xml/../views/syn/T6502_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__Mos6502/ip/core/rtl/xml/../views/syn/core_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__Mos6502/ip/cpu/rtl/xml/../views/syn/cpu_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__adv_debug_sys/Hardware/adv_dbg_if/rtl/xml/../views/syn/adv_dbg_if_jfifo.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__cde/ip/divider/rtl/xml/../views/syn/divider_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__cde/ip/jtag/rtl/xml/../views/syn/jtag_classic_sync.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__cde/ip/lifo/rtl/xml/../views/sim/lifo_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__cde/ip/pad/rtl/xml/../views/syn/pad_od_dig.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__cde/ip/pad/rtl/xml/../views/syn/pad_se_dig.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__cde/ip/serial/rtl/xml/../verilog/serial_xmit.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__cde/ip/serial/rtl/xml/../views/syn/serial_rcvr.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__cde/ip/sram/rtl/xml/../views/syn/sram_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__cde/ip/sram/rtl/xml/../views/syn/sram_dp.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__cde/ip/sram/rtl/xml/../views/syn/sram_word.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__cde/ip/sync/rtl/xml/../views/syn/sync_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__cde/ip/sync/rtl/xml/../views/syn/sync_with_hysteresis.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__io/ip/io_ext_mem_interface/rtl/xml/../views/syn/io_ext_mem_interface_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__io/ip/io_gpio/rtl/xml/../views/syn/io_gpio_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__io/ip/io_module/rtl/xml/../views/syn/io_module_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__io/ip/io_pic/rtl/xml/../views/syn/io_pic_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__io/ip/io_ps2/rtl/xml/../views/syn/io_ps2_mouse.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__io/ip/io_timer/rtl/xml/../views/syn/io_timer_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__io/ip/io_uart/rtl/xml/../views/syn/io_uart_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__io/ip/io_utimer/rtl/xml/../views/syn/io_utimer_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__io/ip/io_vga/rtl/xml/../views/syn/io_vga_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__io/ip/io_vic/rtl/xml/../views/syn/io_vic_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__logic/ip/flash_memcontrl/rtl/xml/../views/syn/flash_memcontrl_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__logic/ip/micro_bus/rtl/xml/../views/syn/micro_bus_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__logic/ip/micro_bus/rtl/xml/../views/syn/micro_bus_exp9.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__logic/ip/ps2_interface/rtl/xml/../views/syn/ps2_interface_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__logic/ip/serial_rcvr/rtl/xml/../views/syn/serial_rcvr_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__logic/ip/uart/rtl/xml/../views/syn/uart_def.v
+read_verilog /home/johne/socgen_xxx/children/opencores.org__logic/ip/vga_char_ctrl/rtl/xml/../views/syn/vga_char_ctrl_def.v
+hierarchy -check -top T6502_def
+proc; opt; fsm; opt; memory; opt
+techmap;
+opt
+dfflibmap -liberty cells.lib
+clean
+write_verilog xxx.v
+

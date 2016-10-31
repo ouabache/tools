@@ -1,2 +1,0 @@
-killall unity-panel-service
-
